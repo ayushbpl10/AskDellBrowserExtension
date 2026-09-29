@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AskDell Dev Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="title-group">
+          <div class="brand-row">
+            <span class="header-title">AskDell Dev Assistant</span>
+            <span id="connection-status-dot" class="status-dot dot-checking" title="Checking AskDell connection..."></span>
+          </div>
+          <span class="version-pill">v2.1 · Enterprise AI</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btn-history" class="icon-btn" title="Conversation History" aria-label="Conversation History">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button id="btn-new-chat" class="icon-btn" title="New Conversation" aria-label="New Conversation">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="btn-theme" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
+          <svg id="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+    <div class="model-bar">
+      <label class="model-selector-label" title="Choose AI model for analysis">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+          <path d="M2 17l10 5 10-5"></path>
+          <path d="M2 12l10 5 10-5"></path>
+        </svg>
+        <select id="model-selector">
+          <option value="claude-opus-4-6" selected>🟣 Claude Opus 4.6</option>
+          <option value="claude-sonnet-5">🟣 Claude Sonnet 5</option>
+          <option value="gemini-3.8-flash">🔵 Gemini 3.8 Flash</option>
+          <option value="gemini-3.1-pro-preview">🔵 Gemini 3.1 Pro Preview</option>
+          <option value="llama-3.3-70b-instruct">🦙 Llama-3.3 70B Instruct</option>
+          <option value="gemma-3-27b-it">💎 Gemma-3 27B It</option>
+          <option value="gpt-oss-120b">🟢 GPT-OSS-120B</option>
+          <option value="gpt-oss-20b">🟢 GPT-OSS-20B</option>
+          <option value="pixtral-12b-vision">👁️ Pixtral-12B Vision</option>
+        </select>
+      </label>
+      <span id="model-info" class="model-info">🧠 reasoning · 👁️ vision</span>
+    </div>
+    <div id="auth-banner" class="banner banner-warning" style="display: none;">
+      <div class="banner-content">
+        <span class="banner-icon">⚠️</span>
+        <span id="auth-banner-text">AskDell tab not detected or session expired.</span>
+      </div>
+      <div class="banner-actions">
+        <button id="btn-open-askdell" class="banner-btn primary">Open AskDell</button>
+        <button id="btn-refresh-askdell-tab" class="banner-btn secondary" style="display: none;">Refresh Tab</button>
+        <button id="btn-retry-auth" class="banner-btn secondary">Retry</button>
+      </div>
+    </div>
+    <div id="context-bar" class="context-bar">
+      <div class="context-info">
+        <span id="detected-platform-badge" class="platform-badge">Detecting...</span>
+        <span id="detected-title" class="context-title" title="Current page context">No active page context</span>
+      </div>
+      <div class="context-meta">
+        <span id="context-size-badge" class="meta-badge">0 KB</span>
+        <button id="btn-refresh-context" class="refresh-context-btn" title="Re-scan active tab">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="quick-actions">
+      <button class="action-btn" data-action="full-review">🔍 Full PR Review</button>
+      <button class="action-btn" data-action="security">🛡️ Security Audit</button>
+      <button class="action-btn" data-action="performance">⚡ Performance</button>
+      <button class="action-btn" data-action="clean-code">🧹 Clean Code</button>
+      <button class="action-btn" data-action="summarize">📝 Summarize</button>
+      <button class="action-btn" data-action="explain">💡 Explain</button>
+      <button class="action-btn" data-action="debug">🐛 Debug Issues</button>
+      <button class="action-btn" data-action="test-cases">🧪 Test Cases</button>
+      <button class="action-btn" data-action="document">📖 Generate Docs</button>
+      <button class="action-btn" data-action="refactor">♻️ Refactor</button>
+      <button class="action-btn" data-action="architecture">🏗️ Architecture</button>
+      <button class="action-btn" data-action="api-review">🔗 API Review</button>
+    </div>
+    <div id="history-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <h3>AskDell Conversations</h3>
+        <button id="btn-close-history" class="icon-close-btn" aria-label="Close History">✕</button>
+      </div>
+      <div class="history-search-box">
+        <input type="text" id="history-search-input" placeholder="Search conversations...">
+      </div>
+      <div id="history-list" class="history-list">
+        <div class="history-loading">Loading conversations...</div>
+      </div>
+    </div>
+    <div id="settings-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <h3>Extension Settings</h3>
+        <button id="btn-close-settings" class="icon-close-btn" aria-label="Close Settings">✕</button>
+      </div>
+      <div class="settings-form">
+        <label class="setting-row">
+          <span>Default AI Model</span>
+          <select id="setting-default-model">
+            <option value="claude-opus-4-6" selected>Claude Opus 4.6</option>
+            <option value="claude-sonnet-5">Claude Sonnet 5</option>
+            <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
+            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+            <option value="llama-3.3-70b-instruct">Llama-3.3 70B Instruct</option>
+            <option value="gemma-3-27b-it">Gemma-3 27B It</option>
+            <option value="gpt-oss-120b">GPT-OSS-120B</option>
+            <option value="gpt-oss-20b">GPT-OSS-20B</option>
+            <option value="pixtral-12b-vision">Pixtral-12B Vision</option>
+          </select>
+        </label>
+        <label class="setting-row checkbox-row">
+          <span>Auto-include page context / PR diff</span>
+          <input type="checkbox" id="setting-include-page" checked>
+        </label>
+        <label class="setting-row checkbox-row">
+          <span>Auto Web Search (for lookups / Gemini)</span>
+          <input type="checkbox" id="setting-web-search" checked>
+        </label>
+        <label class="setting-row">
+          <span>Max Content Length (characters)</span>
+          <input type="number" id="setting-max-length" value="100000" min="10000" max="500000" step="5000">
+        </label>
+        <button id="btn-discover-models" class="btn-small" style="margin-top: 4px;">
+          🔄 Discover Available Models on AskDell
+        </button>
+        <div id="discovered-models" class="settings-note">
+          Queries <code>/api/models</code> on ask.dell.com to detect all accessible models.
+        </div>
+      </div>
+    </div>
+    <main id="messages" class="messages">
+      <div id="welcome-card" class="welcome-card">
+        <div class="welcome-icon">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <h2>AskDell Dev Assistant</h2>
+        <p>Enterprise developer assistant for code reviews, architecture analysis, debugging, and docs powered by <strong>Claude Opus</strong> and <strong>Gemini</strong>.</p>
+        <div class="welcome-models">
+          <span class="model-badge claude">Claude Opus 4.6 (Default)</span>
+          <span class="model-badge claude">Claude Sonnet 5</span>
+          <span class="model-badge gemini">Gemini 3.8 Flash</span>
+          <span class="model-badge gemini">Gemini 3.1 Pro</span>
+          <span class="model-badge llama">Llama-3.3 70B</span>
+          <span class="model-badge gemma">Gemma-3 27B</span>
+        </div>
+        <div class="welcome-tips">
+          <div class="tip-item">
+            <span class="tip-dot"></span>
+            <span>Detects PRs, source code files, Jira tickets, Confluence docs, and CI logs.</span>
+          </div>
+          <div class="tip-item">
+            <span class="tip-dot"></span>
+            <span>Switch models anytime using the top selector bar.</span>
+          </div>
+          <div class="tip-item">
+            <span class="tip-dot"></span>
+            <span>Uses your existing authenticated session on <code>ask.dell.com</code>.</span>
+          </div>
+        </div>
+      </div>
+    </main>
+    <div id="streaming-controls" class="streaming-controls" style="display: none;">
+      <div class="stream-status">
+        <span id="stream-status-icon" class="stream-spinner"></span>
+        <span id="stream-status-text">Analyzing...</span>
+      </div>
+      <button id="btn-stop-stream" class="stop-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+        </svg>
+        Stop Generating
+      </button>
+    </div>
+    <div id="templates" class="templates">
+      <button class="template-chip" data-prompt="What are the potential bugs and edge case issues in this code? List them with severity ratings.">⚠️ Find Issues</button>
+      <button class="template-chip" data-prompt="How can this code be refactored for better readability, modularity, and clean code principles?">✨ Refactor</button>
+      <button class="template-chip" data-prompt="Write comprehensive unit tests with mocks and boundary tests for this code.">🧪 Unit Tests</button>
+      <button class="template-chip" data-prompt="Explain this code step-by-step as if onboarding a new developer to the team.">📚 Explain Logic</button>
+      <button class="template-chip" data-prompt="Generate clean API documentation in Markdown format with parameter specs and examples.">📖 Gen Docs</button>
+      <button class="template-chip" data-prompt="What questions and concerns should I raise during a team review of this code?">❓ Review Qs</button>
+    </div>
+    <footer class="input-area">
+      <div class="input-wrapper">
+        <textarea id="prompt-input" placeholder="Ask about this code, request tests, debug, or refine..." rows="2"></textarea>
+        <div class="input-actions-bar">
+          <div class="input-left-controls">
+            <label class="checkbox-container" title="Automatically attach active tab code or PR diff">
+              <input type="checkbox" id="include-page-content" checked>
+              <span class="checkbox-label">📄 Include page</span>
+            </label>
+            <label class="checkbox-container" title="Toggle web search for real-time CVE and doc lookups">
+              <input type="checkbox" id="include-web-search" checked>
+              <span class="checkbox-label">🌐 Web search</span>
+            </label>
+          </div>
+          <div class="input-right-controls">
+            <span id="char-counter" class="char-counter">0 chars</span>
+            <button id="btn-stop" class="stop-icon-btn" style="display: none;" title="Stop generating" aria-label="Stop">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+              </svg>
+            </button>
+            <button id="btn-send" class="send-btn claude-send" title="Send message (Enter)" aria-label="Send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

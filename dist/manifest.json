@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "AskDell Dev Assistant",
+  "version": "2.1.0",
+  "description": "AI-powered developer assistant via ask.dell.com — analyze code, PRs, docs, and tickets with Claude Opus 4 and Gemini",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "https://ask.dell.com/*",
+    "https://*/*",
+    "http://*/*"
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ask.dell.com/*"
+      ],
+      "js": [
+        "askdell-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "AskDell Dev Assistant",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}
