@@ -121,20 +121,24 @@ CERTIFICATION NOTES FOR REVIEW TEAM:
 
 ### Step 6: Submit for Review
 1. Click **Submit**.
-2. Microsoft's automated review system typically reviews and certifies unlisted extensions within **1 to 2 business days**.
+2. **Current Status**: ⏳ **In Review** (Submitted 2026-09-30)
+   * **Store ID**: `0RDCKDXZNJR6`
+   * **CRX ID**: `dllfpldlckoldabdmkjcffilfhimaknc`
+   * **Product ID**: `ab9e31a4-83a7-4f6e-a430-413a8ec0668b`
+   * **Visibility**: **Hidden** (Unlisted — installable only via direct link)
 
 ---
 
 ## 🎯 How Your Team Installs It (The 1-Click Experience)
 
-Once certified, Microsoft will provide you with your permanent direct URL:
+Once certified (typically within 1–2 business days), Microsoft activates the direct install URL:
 ```
-https://microsoftedge.microsoft.com/addons/detail/askdell-dev-assistant/<extension-id>
+https://microsoftedge.microsoft.com/addons/detail/dllfpldlckoldabdmkjcffilfhimaknc
 ```
 
 ### What You Send to Your Team:
 > *"Hey team! We have our internal AskDell Dev Assistant live on Edge Add-ons.  
-> Click here to install in 1 click: **`https://microsoftedge.microsoft.com/addons/detail/<extension-id>`**  
+> Click here to install in 1 click: **`https://microsoftedge.microsoft.com/addons/detail/dllfpldlckoldabdmkjcffilfhimaknc`**  
 > Click **Get** / **Add to Edge**, keep `ask.dell.com` logged in, and enjoy 1-click PR reviews in your side panel!"*
 
 ### How Future Updates Work:

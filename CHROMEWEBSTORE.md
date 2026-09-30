@@ -1,6 +1,6 @@
 # Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.1
 
-> **Status**: Ready for Submission  
+> **Status**: ⏳ Pending Review (Submitted 2026-09-30)  
 > **Item ID**: `emfpgabhdjmfbmfcdnkflcgkcchejfik`  
 > **Package Version**: `2.1.0` (Manifest V3)  
 > **Last Updated**: 2026-09-30
