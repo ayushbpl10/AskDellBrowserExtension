@@ -1,89 +1,166 @@
-# Chrome Web Store Listing — AskDell PR Reviewer
+# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.1
 
-> Last Updated: 2026-09-28
+> **Status**: Ready for Submission  
+> **Item ID**: `emfpgabhdjmfbmfcdnkflcgkcchejfik`  
+> **Package Version**: `2.1.0` (Manifest V3)  
+> **Last Updated**: 2026-09-30
 
-## Store Listing
+---
 
-**Extension Name** [REQUIRED]
-AskDell PR Reviewer
+## 1. Store Listing Tab (`/edit/listing`)
 
-**Short Description** [REQUIRED]
-AI-powered PR and code reviews directly inside your browser side panel using Gemini 3.8 Flash via AskDell.
+### Product Details
 
-**Detailed Description** [REQUIRED]
-Accelerate your code review workflow with AskDell PR Reviewer.
+* **Title from package** *(Auto-filled)*:  
+  `AskDell Dev Assistant`
 
-AskDell PR Reviewer brings the enterprise power of Gemini 3.8 Flash hosted on Dell GCP directly into your browser's side panel. Effortlessly review pull requests, inspect unified diffs, run automated security audits, and generate test plans without toggling between tabs or copying code back and forth.
+* **Summary from package** *(Auto-filled)*:  
+  `AI-powered developer assistant via ask.dell.com — analyze code, PRs, docs, and tickets with Claude Opus 4 and Gemini`
+
+* **Description** *(Copy and paste the exact block below)*:
+```text
+Accelerate your developer workflow with AskDell Dev Assistant.
+
+AskDell Dev Assistant brings the power of enterprise frontier AI directly into your browser side panel via ask.dell.com. Effortlessly review pull requests, inspect unified diffs, run automated OWASP security audits, generate comprehensive unit test suites, and analyze architecture without leaving your repository tabs or copying code back and forth.
 
 KEY FEATURES
-- Direct Pull Request Detection: Seamlessly extracts diffs, file lists, and PR descriptions from GitHub, GitLab, Azure DevOps, and Bitbucket.
-- Enterprise AskDell Integration: Connects directly with your existing ask.dell.com session using secure same-origin session authentication.
-- Real-Time Streaming AI Responses: Streams instant feedback token-by-token with live status indicators.
-- One-Click Review Actions: Instant buttons for Full PR Review, Security Vulnerability Audit, Performance & Complexity Analysis, Clean Code Refactoring, and Test Plan Generation.
-- Rich Markdown & Diff Rendering: Native formatting with syntax highlighting, green/red diff styling, and one-click code copy buttons.
-- Conversation History: Access and resume your previous discussions directly from your AskDell account.
-- Dark & Light Themes: Polished Dell Technologies design system tailored for modern developer workflows.
+• Multi-Platform Pull Request Detection: Automatically detects and extracts PR diffs, file trees, and descriptions across GitHub Enterprise (eos2git), GitLab, Azure DevOps, Bitbucket, and Jira.
+• 10 Enterprise AI Models: Seamlessly switch between Claude Opus 4.6, Claude Sonnet 5, Gemini 3.8 Flash, Gemini 3.1 Pro, Llama-3.3 70B Instruct, Gemma-3 27B, GPT-OSS-120B, GPT-OSS-20B, and Pixtral-12B Vision.
+• Collapsible Reasoning & Thinking Blocks: View step-by-step reasoning processes and architectural deliberation for models with thought chains (Claude Opus 4.6).
+• Two-Phase Hybrid Web Search: Live verification of modern library versions, framework updates, and API documentation with real-time status indicators.
+• 12 One-Click Developer Actions:
+  - 🔍 Full PR Review: Architecture, logic correctness, edge cases, and line-level feedback.
+  - 🛡️ Security Audit: OWASP Top 10 vulnerabilities, injection, XSS, CSRF, and authorization flaws.
+  - ⚡ Performance: Big-O algorithmic complexity, memory allocations, and N+1 query analysis.
+  - 🧹 Clean Code: SOLID violations, DRY principles, naming conventions, and refactoring tips.
+  - 📝 Summarize: High-level technical executive summary of changes and risks.
+  - 💡 Explain: Step-by-step logic breakdown for onboarding team members.
+  - 🐛 Debug Issues: Null pointer risks, race conditions, and unhandled exception analysis.
+  - 🧪 Test Cases: Unit test suites, mocks, and boundary tests following AAA pattern.
+  - 📖 Generate Docs: Markdown API documentation, parameters, return types, and usage examples.
+  - ♻️ Refactor: Design patterns (Strategy, Factory, DI) and code simplification.
+  - 🏗️ Architecture: Modularity, coupling/cohesion, separation of concerns, and scalability.
+  - 🔗 API Review: HTTP methods, request/response models, pagination, and error schemas.
+• Native Markdown & Diff Viewer: Colorized syntax highlighting, green/red diff styling, and one-click code copy buttons.
+• Conversation History: Search, browse, and resume previous AskDell discussions directly from the side panel.
+• Enterprise Security: Connects directly with your existing authenticated ask.dell.com session using secure same-origin cookies. Zero third-party servers, zero telemetry.
 
 HOW TO USE IT
-1. Open and sign in to ask.dell.com in any browser tab.
+1. Sign in to ask.dell.com in any browser tab.
 2. Navigate to your pull request or code repository on GitHub, GitLab, Azure DevOps, or Bitbucket.
 3. Click the extension icon in your toolbar to open the Side Panel.
-4. Click any quick action button (e.g., "Full PR Review" or "Security Audit") or type your custom prompt.
+4. Click any quick action button (e.g. "Full PR Review" or "Security Audit") or ask a custom question.
 
-PRIVACY & SECURITY
-Your code stays secure within your enterprise environment. Code snippets and PR diffs are sent exclusively to your authenticated ask.dell.com endpoint. No third-party servers or external telemetry are used.
+ENTERPRISE PRIVACY & SECURITY
+Your code stays secure within your enterprise environment. Code snippets and PR diffs are sent exclusively to your authenticated ask.dell.com endpoint. No third-party servers, external telemetry, or data mining are involved.
+```
 
-**Category** [REQUIRED]
-Developer Tools
+* **Category** [REQUIRED]:  
+  `Developer Tools`
 
-**Single Purpose** [REQUIRED]
-Extracts code diffs from active web pages and provides AI-powered code reviews through the user's authenticated AskDell session.
+* **Language** [REQUIRED]:  
+  `English`
 
-**Primary Language** [REQUIRED]
-English
+---
 
-## Graphics & Assets
+### Graphic Assets
 
-| Asset | Dimensions | Status | Filename |
-|-------|-----------|--------|----------|
-| Store Icon [REQUIRED] | 128×128 PNG | ✅ Ready | `icons/icon128.png` |
-| Small Icon | 48×48 PNG | ✅ Ready | `icons/icon48.png` |
-| Toolbar Icon | 16×16 PNG | ✅ Ready | `icons/icon16.png` |
-| Screenshot 1 [REQUIRED] | 1280×800 or 640×400 | ⬜ Not created | |
-| Screenshot 2 [RECOMMENDED] | 1280×800 or 640×400 | ⬜ Not created | |
-| Small Promo Tile [RECOMMENDED] | 440×280 | ⬜ Not created | |
+All required assets have been rendered to exact Google Chrome Web Store pixel dimensions in **24-bit JPEG format (zero alpha channel)** to guarantee acceptance without rejection:
 
-## Permissions Justification
+| Field | Required Size | File Path in Workspace | Status |
+| :--- | :--- | :--- | :--- |
+| **Store icon** | 128 × 128 px | `f:\AskDellBrowserExtension\store_assets\store-icon-128x128.png` | ✅ Generated |
+| **Screenshot 1** *(Required)* | 1,280 × 800 px | `f:\AskDellBrowserExtension\store_assets\screenshot-1-pr-review.jpg` | ✅ Generated |
+| **Screenshot 2** *(Recommended)* | 1,280 × 800 px | `f:\AskDellBrowserExtension\store_assets\screenshot-2-enterprise-models.jpg` | ✅ Generated |
+| **Screenshot 3** *(Recommended)* | 1,280 × 800 px | `f:\AskDellBrowserExtension\store_assets\screenshot-3-security-audit.jpg` | ✅ Generated |
+| **Screenshot 4** *(Recommended)* | 1,280 × 800 px | `f:\AskDellBrowserExtension\store_assets\screenshot-4-quick-actions-tests.jpg` | ✅ Generated |
+| **Small promo tile** *(Recommended)* | 440 × 280 px | `f:\AskDellBrowserExtension\store_assets\promo-small-440x280.jpg` | ✅ Generated |
+| **Marquee promo tile** *(Recommended)* | 1,400 × 560 px | `f:\AskDellBrowserExtension\store_assets\promo-marquee-1400x560.jpg` | ✅ Generated |
 
-| Permission | Type | Justification |
-|------------|------|---------------|
-| `sidePanel` | permissions | Displays the AI chat and review interface in Chrome's side panel side-by-side with code pages. |
-| `storage` | permissions | Persists user theme preference and pending review actions from context menus across sessions. |
-| `tabs` | permissions | Reads the active tab's title and URL to provide context-aware PR reviews and locate the user's AskDell tab. |
-| `scripting` | permissions | Injects the content extraction script into the active PR/code tab to read diffs when requested by the user. |
-| `contextMenus` | permissions | Adds right-click options ("AskDell: Review Selection", "AskDell: Review PR / Diff") to trigger instant reviews. |
-| `https://ask.dell.com/*` | host_permissions | Allows the bridge content script to communicate with AskDell's API and execute authenticated fetch calls. |
-| `https://*/*`, `http://*/*` | host_permissions | Enables reading pull request diffs and repository code on arbitrary Git hosting sites (GitHub, GitLab, ADO, internal Git servers) from the side panel. |
+---
 
-## Privacy & Data Use
+### Additional Fields
 
-### Data Collection
+* **Official URL**:  
+  *Leave blank / None* (unless your domain is registered in Google Search Console).
 
-**Does the extension collect user data?** Yes
+* **Homepage URL**:  
+  `https://ask.dell.com` (or your team's internal repository link)
 
-| Data Type | Collected? | Transmitted Off-Device? | Purpose | Shared with Third Parties? |
-|-----------|-----------|------------------------|---------|---------------------------|
-| Authentication info | No | No | Session cookies remain within the browser's ask.dell.com origin | No |
-| Web history | No | No | Only active tab URL/title is read during review request | No |
-| Website content | Yes | Yes (Only to user's ask.dell.com) | PR diffs and selected code are transmitted to AskDell for AI review | No |
+* **Support URL**:  
+  `https://ask.dell.com` (or internal Dell developer support link)
 
-### Data Use Certification
-- [x] Data is NOT sold to third parties
-- [x] Data is NOT used for purposes unrelated to the extension's core functionality
-- [x] Data is NOT used for creditworthiness or lending purposes
+* **Mature Content**:  
+  Select **No** (Enterprise developer tool; no mature, violent, or sensitive content).
 
-## Version History
+* **Item Support**:  
+  Select **On** (Allows users to leave comments and feedback).
 
-| Version | Date | Changes | Status |
-|---------|------|---------|--------|
-| 1.0.0 | 2026-09-28 | Initial release with side panel, bridge communication, PR extraction, and streaming SSE | Draft |
+---
+
+## 2. Privacy Tab (`/edit/privacy`)
+
+### Single Purpose Statement [REQUIRED]
+```text
+AI-powered developer assistant that analyzes code diffs, pull requests, and technical pages via the user's authenticated AskDell session.
+```
+
+### Permission Justifications [REQUIRED]
+
+Google reviewers require a specific, plain-English justification for every declared permission:
+
+| Permission | Type | Exact Text to Paste into Developer Console |
+| :--- | :--- | :--- |
+| `sidePanel` | permission | Displays the interactive AI assistant interface side-by-side with code repositories and pull requests without leaving the page. |
+| `storage` | permission | Persists user preferences locally (selected AI model, dark/light theme, and max content length settings) across browser sessions. |
+| `tabs` | permission | Identifies active tab URL and title to detect pull requests and locate the user's authenticated ask.dell.com tab. |
+| `scripting` | permission | Extracts code diffs, file trees, and pull request descriptions from active developer web pages when requested by the user. |
+| `contextMenus` | permission | Adds right-click options ('AskDell: Review Selection', 'AskDell: Review PR / Diff') to send code directly to the assistant. |
+| `https://ask.dell.com/*` | host_permission | Connects to ask.dell.com to communicate with the enterprise AI backend using the user's active session cookies. |
+| `https://*/*`, `http://*/*` | host_permission | Extracts pull request diffs and repository code on internal and external Git hosting platforms (GitHub, GitLab, Azure DevOps, Bitbucket). |
+
+---
+
+### Data Usage Declarations
+
+* **Does your extension collect user data?**  
+  Select **Yes**
+
+* **Types of Data Collected**:
+  - Check **Website content**:
+    - Purpose: *Functionality*
+    - Description: *Pull request diffs and selected code snippets are extracted and transmitted solely to the user's authenticated ask.dell.com enterprise instance for AI analysis upon user request.*
+
+* **Certification Checkboxes**:
+  - [x] **I certify that data is not sold to third parties**
+  - [x] **I certify that data is not used for purposes unrelated to the item's core functionality**
+  - [x] **I certify that data is not used for creditworthiness or lending purposes**
+
+* **Privacy Policy URL**:  
+  Provide a public or internal URL containing the privacy disclosure (e.g., GitHub raw README or Gist).
+
+---
+
+## 3. Test Instructions Tab (`/testcredentials`)
+
+Google Chrome Web Store reviewers test your extension. Because `ask.dell.com` requires Dell authentication, provide this clear note in the **Test instructions** box:
+
+```text
+NOTE FOR REVIEW TEAM:
+AskDell Dev Assistant is an enterprise developer extension designed for engineers using Dell's internal AI portal (ask.dell.com).
+
+To test the extension:
+1. Open any public GitHub pull request (e.g., https://github.com/facebook/react/pull/28000/files).
+2. Click the extension icon in the toolbar to open the Side Panel.
+3. The side panel UI initializes and detects the repository and pull request diffs.
+4. When authenticated to ask.dell.com in an adjacent tab, clicking any of the 12 quick action chips (e.g. "Full PR Review" or "Security Audit") streams AI analysis into the side panel. If not logged in, the UI displays a clear "AskDell tab not detected or session expired" warning banner with a 1-click "Open AskDell" button.
+```
+
+---
+
+## 4. Distribution Tab (`/edit/distribution`)
+
+* **Visibility**:  
+  - If sharing only with team members: Select **Unlisted** (Only users with the direct link can install).  
+  - If distributing publicly: Select **Public**.
+* **Pricing**: **Free**

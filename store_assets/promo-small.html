@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 440px;
+    height: 280px;
+    background: radial-gradient(circle at 100% 0%, #1e1b4b 0%, #0b0f17 65%, #06090e 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #f1f5f9;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    position: relative;
+  }
+  .glow {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    background: radial-gradient(circle, rgba(0, 118, 206, 0.25) 0%, rgba(124, 58, 237, 0.15) 50%, transparent 70%);
+    top: -60px;
+    right: -60px;
+    pointer-events: none;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1;
+  }
+  .icon-wrapper {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #0076CE 0%, #7C3AED 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 118, 206, 0.4);
+  }
+  .title-group h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: #ffffff;
+  }
+  .title-group p {
+    font-size: 11.5px;
+    color: #38bdf8;
+    font-weight: 600;
+  }
+  .feature-list {
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .feature-item {
+    font-size: 12px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .feature-item span {
+    color: #4ade80;
+    font-weight: bold;
+  }
+  .models-footer {
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 12px;
+  }
+  .badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .badge.claude { background: rgba(124, 58, 237, 0.25); color: #c084fc; border: 1px solid #7c3aed; }
+  .badge.gemini { background: rgba(0, 118, 206, 0.25); color: #38bdf8; border: 1px solid #0076CE; }
+  .powered-by { font-size: 10px; color: #64748b; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="header-brand">
+    <div class="icon-wrapper">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.6"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+    </div>
+    <div class="title-group">
+      <h1>AskDell Dev Assistant</h1>
+      <p>AI Side Panel for Enterprise Developers</p>
+    </div>
+  </div>
+
+  <div class="feature-list">
+    <div class="feature-item"><span>✓</span> 1-Click Pull Request & Diff Analysis</div>
+    <div class="feature-item"><span>✓</span> Automated Security & OWASP Vulnerability Audits</div>
+    <div class="feature-item"><span>✓</span> 10 Models: Claude Opus 4.6 & Gemini 3.8 Flash</div>
+  </div>
+
+  <div class="models-footer">
+    <div style="display:flex; gap:6px;">
+      <span class="badge claude">Claude Opus 4.6</span>
+      <span class="badge gemini">Gemini 3.8 Flash</span>
+    </div>
+    <div class="powered-by">ask.dell.com Enterprise</div>
+  </div>
+</body>
+</html>
