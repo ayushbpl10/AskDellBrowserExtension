@@ -91,7 +91,117 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
   }
 });
+let askDellConnection = {
+  status: "checking",
+  tabId: null,
+  tabUrl: null,
+  lastChecked: 0
+};
+async function checkAskDellConnection(force = false) {
+  const now = Date.now();
+  if (!force && now - askDellConnection.lastChecked < 4000 && askDellConnection.status !== "checking") {
+    return askDellConnection;
+  }
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://ask.dell.com/*" });
+    if (!tabs || tabs.length === 0) {
+      updateConnectionStatus("not_open", null, null);
+      return askDellConnection;
+    }
+    const tab = tabs[0];
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: "ASKDELL_CHECK_AUTH" });
+      if (response && response.authenticated) {
+        updateConnectionStatus("connected", tab.id, tab.url);
+      } else {
+        updateConnectionStatus("unauthenticated", tab.id, tab.url);
+      }
+    } catch (msgErr) {
+      if (tab.status === "loading") {
+        if (askDellConnection.status === "not_open") {
+          updateConnectionStatus("checking", tab.id, tab.url);
+        }
+      } else {
+        updateConnectionStatus("unauthenticated", tab.id, tab.url);
+      }
+    }
+  } catch (err) {
+    console.warn("[AskDell Background] Connection check error:", err);
+  }
+  return askDellConnection;
+}
+function updateConnectionStatus(newStatus, tabId, tabUrl) {
+  const changed = askDellConnection.status !== newStatus || askDellConnection.tabId !== tabId;
+  askDellConnection.status = newStatus;
+  askDellConnection.tabId = tabId;
+  askDellConnection.tabUrl = tabUrl;
+  askDellConnection.lastChecked = Date.now();
+  if (changed) {
+    chrome.runtime.sendMessage({
+      type: "ASKDELL_CONNECTION_STATUS",
+      connection: askDellConnection
+    }).catch(() => {});
+  }
+}
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url && tab.url.includes("ask.dell.com")) {
+    if (changeInfo.status === "complete") {
+      checkAskDellConnection(true);
+    }
+  }
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (askDellConnection.tabId === tabId) {
+    checkAskDellConnection(true);
+  }
+});
+checkAskDellConnection(true);
+setInterval(() => {
+  checkAskDellConnection(false);
+}, 30000);
+async function openOrFocusAskDellTab() {
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://ask.dell.com/*" });
+    if (tabs && tabs.length > 0) {
+      const t = tabs[0];
+      await chrome.tabs.update(t.id, { active: true });
+      if (t.windowId) {
+        try {
+          await chrome.windows.update(t.windowId, { focused: true });
+        } catch (e) {}
+      }
+      checkAskDellConnection(true);
+      return { success: true, tabId: t.id, focused: true };
+    } else {
+      const tab = await chrome.tabs.create({ url: "https://ask.dell.com" });
+      updateConnectionStatus("checking", tab.id, tab.url);
+      return { success: true, tabId: tab.id, created: true };
+    }
+  } catch (err) {
+    return { error: err.message };
+  }
+}
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "GET_ASKDELL_CONNECTION") {
+    checkAskDellConnection(false).then((conn) => sendResponse(conn));
+    return true;
+  }
+  if (message.type === "CHECK_ASKDELL_CONNECTION") {
+    checkAskDellConnection(true).then((conn) => sendResponse(conn));
+    return true;
+  }
+  if (message.type === "ASKDELL_SESSION_ACTIVE") {
+    updateConnectionStatus("connected", sender.tab?.id || askDellConnection.tabId, sender.tab?.url || askDellConnection.tabUrl);
+    return false;
+  }
+  if (message.type === "ASKDELL_SESSION_EXPIRED" || message.type === "SESSION_EXPIRED") {
+    updateConnectionStatus("unauthenticated", sender.tab?.id || askDellConnection.tabId, sender.tab?.url || askDellConnection.tabUrl);
+    return false;
+  }
+  if (message.type === "OPEN_OR_FOCUS_ASKDELL" || message.type === "OPEN_ASKDELL_TAB") {
+    openOrFocusAskDellTab().then((res) => sendResponse(res));
+    return true;
+  }
   if (message.type === "EXTRACT_TAB_CONTENT") {
     (async () => {
       try {
@@ -145,17 +255,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
-  if (message.type === "OPEN_ASKDELL_TAB") {
-    (async () => {
-      try {
-        const tab = await chrome.tabs.create({ url: "https://ask.dell.com" });
-        sendResponse({ success: true, tabId: tab.id });
-      } catch (err) {
-        sendResponse({ error: err.message });
-      }
-    })();
-    return true;
-  }
   if (message.type === "REFRESH_ASKDELL_TAB") {
     (async () => {
       try {
@@ -178,6 +277,17 @@ function extractPageContent() {
   const url = window.location.href;
   const hostname = window.location.hostname;
   const title = document.title;
+  if (hostname.includes("ask.dell.com") && url.includes("/s/")) {
+    const shareId = url.split("/s/")[1]?.split(/[?#/]/)[0];
+    return {
+      platform: "askdell",
+      type: "shared_chat",
+      shareId: shareId,
+      url: url,
+      title: `Shared AskDell Session [${shareId}]`,
+      text: `AskDell Shared Session: ${shareId}\nURL: ${url}`
+    };
+  }
   const isGitHub =
     hostname.includes("github") ||
     Boolean(document.querySelector(".gh-header-title, .diff-table, .react-code-diff-table, meta[name*='octolytics'], [data-component='PH_Title'], .js-issue-title, .file-header")) ||

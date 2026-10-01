@@ -10,7 +10,8 @@ const { execSync } = require("child_process");
 
 const ROOT_DIR = __dirname;
 const DIST_DIR = path.join(ROOT_DIR, "dist");
-const ZIP_NAME = "AskDell-Dev-Assistant-v2.1.zip";
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, "manifest.json"), "utf8"));
+const ZIP_NAME = `AskDell-Dev-Assistant-v${manifest.version}.zip`;
 const ZIP_PATH = path.join(DIST_DIR, ZIP_NAME);
 
 console.log("============================================================");
@@ -140,7 +141,6 @@ function minifyHtml(html) {
 console.log("📦 Processing and minifying files into dist/...");
 
 // manifest.json
-const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, "manifest.json"), "utf8"));
 fs.writeFileSync(path.join(DIST_DIR, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
 console.log("  ✓ manifest.json");
 
@@ -182,12 +182,6 @@ if (fs.existsSync(iconsSrc)) {
   console.log(`  ✓ icons/ (${iconFiles.length} icons copied)`);
 }
 
-// Copy 1-click Install.bat
-if (fs.existsSync(path.join(ROOT_DIR, "Install.bat"))) {
-  fs.copyFileSync(path.join(ROOT_DIR, "Install.bat"), path.join(DIST_DIR, "Install.bat"));
-  console.log("  ✓ Install.bat (1-click team installer)");
-}
-
 // 6. Validate JavaScript syntax of all output files
 console.log("\n🔍 Validating production JavaScript syntax...");
 try {
@@ -200,14 +194,20 @@ try {
   process.exit(1);
 }
 
-// 7. Create ZIP archive for distribution
-console.log("\n🗜️  Packaging into distribution ZIP...");
+// 7. Create clean ZIP archive for Edge/Chrome Web Store submission (excluding .bat and .zip)
+console.log("\n🗜️  Packaging into clean store distribution ZIP...");
 try {
-  const zipCmd = `powershell -NoProfile -Command "Compress-Archive -Path '${DIST_DIR}\\*' -DestinationPath '${ZIP_PATH}' -Force"`;
+  const zipCmd = `powershell -NoProfile -Command "Get-ChildItem -Path '${DIST_DIR}' -Exclude '*.zip','*.bat' | Compress-Archive -DestinationPath '${ZIP_PATH}' -Force"`;
   execSync(zipCmd, { stdio: "inherit" });
-  console.log(`  ✓ Created: ${ZIP_PATH}`);
+  console.log(`  ✓ Created: ${ZIP_PATH} (clean package without .bat scripts)`);
 } catch (err) {
   console.warn("  ⚠️ PowerShell zip failed, dist/ folder is still ready for use.");
+}
+
+// 8. Copy 1-click Install.bat to dist/ for local sideloading convenience (after ZIP creation)
+if (fs.existsSync(path.join(ROOT_DIR, "Install.bat"))) {
+  fs.copyFileSync(path.join(ROOT_DIR, "Install.bat"), path.join(DIST_DIR, "Install.bat"));
+  console.log("  ✓ Install.bat (1-click team installer copied for offline sideloading)");
 }
 
 console.log("\n============================================================");

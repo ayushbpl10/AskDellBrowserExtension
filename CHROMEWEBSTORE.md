@@ -1,9 +1,10 @@
-# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.1
+# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.2.1
 
-> **Status**: ⏳ Pending Review (Submitted 2026-09-30)  
+> **Status**: Ready for Resubmission  
 > **Item ID**: `emfpgabhdjmfbmfcdnkflcgkcchejfik`  
-> **Package Version**: `2.1.0` (Manifest V3)  
-> **Last Updated**: 2026-09-30
+> **Package Version**: `2.2.1` (Manifest V3)  
+> **Package File**: `dist/AskDell-Dev-Assistant-v2.2.1.zip`  
+> **Last Updated**: 2026-10-01
 
 ---
 
@@ -15,7 +16,7 @@
   `AskDell Dev Assistant`
 
 * **Summary from package** *(Auto-filled)*:  
-  `AI-powered developer assistant via ask.dell.com — analyze code, PRs, docs, and tickets with Claude Opus 4 and Gemini`
+  `Enterprise AI developer assistant via ask.dell.com — review pull requests, diffs, security, and architecture in your side panel`
 
 * **Description** *(Copy and paste the exact block below)*:
 ```text
@@ -25,8 +26,8 @@ AskDell Dev Assistant brings the power of enterprise frontier AI directly into y
 
 KEY FEATURES
 • Multi-Platform Pull Request Detection: Automatically detects and extracts PR diffs, file trees, and descriptions across GitHub Enterprise (eos2git), GitLab, Azure DevOps, Bitbucket, and Jira.
-• 10 Enterprise AI Models: Seamlessly switch between Claude Opus 4.6, Claude Sonnet 5, Gemini 3.8 Flash, Gemini 3.1 Pro, Llama-3.3 70B Instruct, Gemma-3 27B, GPT-OSS-120B, GPT-OSS-20B, and Pixtral-12B Vision.
-• Collapsible Reasoning & Thinking Blocks: View step-by-step reasoning processes and architectural deliberation for models with thought chains (Claude Opus 4.6).
+• Enterprise AI Model Switching: Seamlessly select between frontier reasoning models, high-speed execution engines, and multimodal architectures configured for your enterprise environment.
+• Collapsible Reasoning & Thinking Blocks: View step-by-step reasoning processes and architectural deliberation for models supporting thought chains.
 • Two-Phase Hybrid Web Search: Live verification of modern library versions, framework updates, and API documentation with real-time status indicators.
 • 12 One-Click Developer Actions:
   - 🔍 Full PR Review: Architecture, logic correctness, edge cases, and line-level feedback.
@@ -42,6 +43,7 @@ KEY FEATURES
   - 🏗️ Architecture: Modularity, coupling/cohesion, separation of concerns, and scalability.
   - 🔗 API Review: HTTP methods, request/response models, pagination, and error schemas.
 • Native Markdown & Diff Viewer: Colorized syntax highlighting, green/red diff styling, and one-click code copy buttons.
+• Team Collaboration & Session Sharing: Generate shareable encrypted conversation snapshots to collaborate with team members across reviews.
 • Conversation History: Search, browse, and resume previous AskDell discussions directly from the side panel.
 • Enterprise Security: Connects directly with your existing authenticated ask.dell.com session using secure same-origin cookies. Zero third-party servers, zero telemetry.
 
@@ -143,17 +145,21 @@ Google reviewers require a specific, plain-English justification for every decla
 
 ## 3. Test Instructions Tab (`/testcredentials`)
 
-Google Chrome Web Store reviewers test your extension. Because `ask.dell.com` requires Dell authentication, provide this clear note in the **Test instructions** box:
+Google and Microsoft store reviewers test your extension. Because `ask.dell.com` is Dell's internal corporate portal requiring Dell VPN/SSO, version 2.2.1 includes a full-fidelity **Reviewer Demo Mode** to allow testing of all features:
 
 ```text
 NOTE FOR REVIEW TEAM:
-AskDell Dev Assistant is an enterprise developer extension designed for engineers using Dell's internal AI portal (ask.dell.com).
+AskDell Dev Assistant is an enterprise developer assistant designed for engineers using Dell's internal AI portal (ask.dell.com).
+Because ask.dell.com is hosted on Dell Technologies' corporate intranet (accessible via Dell corporate VPN), version 2.2.1 includes a dedicated "Reviewer Demo Mode" so the store review team can thoroughly test all primary functions:
 
-To test the extension:
-1. Open any public GitHub pull request (e.g., https://github.com/facebook/react/pull/28000/files).
+1. Open any public GitHub pull request or code page (e.g., https://github.com/microsoft/vscode or any active tab).
 2. Click the extension icon in the toolbar to open the Side Panel.
-3. The side panel UI initializes and detects the repository and pull request diffs.
-4. When authenticated to ask.dell.com in an adjacent tab, clicking any of the 12 quick action chips (e.g. "Full PR Review" or "Security Audit") streams AI analysis into the side panel. If not logged in, the UI displays a clear "AskDell tab not detected or session expired" warning banner with a 1-click "Open AskDell" button.
+3. In the top connection banner, click "🧪 Try Demo Mode" (or select Reviewer Demo Mode in the Settings drawer ⚙️).
+4. Notice the connection dot turns cyan ("Reviewer Demo Mode Active").
+5. Click any of the 12 quick action chips (e.g. "Full PR Review", "Security Audit", "Test Cases", "Performance") to test token streaming, markdown formatting, syntax highlighting, and collapsible reasoning blocks (<details>).
+6. Test interactive chat by typing any question in the prompt box and clicking Send.
+7. Switch models in the top dropdown (Claude Opus 4.6, Claude Sonnet 5, Gemini 3.8 Flash, Llama-3.3 70B) to verify model badges and capabilities.
+8. Open the History drawer (clock icon in header) to test sample conversation loading and search.
 ```
 
 ---

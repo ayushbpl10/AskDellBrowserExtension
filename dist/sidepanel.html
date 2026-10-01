@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
+  <div id="toast-notification" class="toast-notification" style="display: none;"></div>
   <div id="app">
     <header class="header">
       <div class="header-left">
@@ -20,7 +21,7 @@
             <span class="header-title">AskDell Dev Assistant</span>
             <span id="connection-status-dot" class="status-dot dot-checking" title="Checking AskDell connection..."></span>
           </div>
-          <span class="version-pill">v2.1 · Enterprise AI</span>
+          <span class="version-pill">v2.2.1 · Enterprise AI</span>
         </div>
       </div>
       <div class="header-right">
@@ -34,6 +35,14 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button id="btn-share-chat" class="icon-btn" title="Group Chat & Share Session" aria-label="Group Chat & Share Session">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
         </button>
         <button id="btn-new-chat" class="icon-btn" title="New Conversation" aria-label="New Conversation">
@@ -70,15 +79,37 @@
       </label>
       <span id="model-info" class="model-info">🧠 reasoning · 👁️ vision</span>
     </div>
-    <div id="auth-banner" class="banner banner-warning" style="display: none;">
-      <div class="banner-content">
-        <span class="banner-icon">⚠️</span>
-        <span id="auth-banner-text">AskDell tab not detected or session expired.</span>
+    <div id="auth-banner" class="auth-card auth-card-warning" style="display: none;">
+      <div class="auth-card-main">
+        <div class="auth-card-badge" id="auth-banner-badge">
+          <span class="auth-card-icon" id="auth-banner-icon">🏢</span>
+        </div>
+        <div class="auth-card-text">
+          <div class="auth-card-title" id="auth-banner-text">AskDell Tab Not Detected</div>
+          <div class="auth-card-subtext" id="auth-banner-subtext">Connect to Dell VPN to use live Claude & Gemini models, or test with Demo Mode.</div>
+        </div>
       </div>
-      <div class="banner-actions">
-        <button id="btn-open-askdell" class="banner-btn primary">Open AskDell</button>
-        <button id="btn-refresh-askdell-tab" class="banner-btn secondary" style="display: none;">Refresh Tab</button>
-        <button id="btn-retry-auth" class="banner-btn secondary">Retry</button>
+      <div class="auth-card-actions" id="auth-banner-actions">
+        <button id="btn-open-askdell" class="btn-auth-primary" title="Open or switch to AskDell session tab">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <span id="btn-open-askdell-label">Open AskDell Session</span>
+        </button>
+        <div class="auth-card-secondary-row">
+          <button id="btn-retry-auth" class="btn-auth-secondary" title="Check connection status in background">
+            <svg id="btn-retry-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            <span id="btn-retry-auth-label">Check Connection</span>
+          </button>
+          <button id="btn-demo-mode" class="btn-auth-demo" title="Use Reviewer Demo Mode with simulated responses">
+            <span id="btn-demo-mode-label">🧪 Try Demo Mode</span>
+          </button>
+        </div>
       </div>
     </div>
     <div id="context-bar" class="context-bar">
@@ -87,6 +118,7 @@
         <span id="detected-title" class="context-title" title="Current page context">No active page context</span>
       </div>
       <div class="context-meta">
+        <span id="shared-session-badge" class="meta-badge shared-badge" style="display: none;" title="Group Shared Session Active">👥 Shared</span>
         <span id="context-size-badge" class="meta-badge">0 KB</span>
         <button id="btn-refresh-context" class="refresh-context-btn" title="Re-scan active tab">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -130,6 +162,16 @@
       </div>
       <div class="settings-form">
         <label class="setting-row">
+          <span>Connection Mode</span>
+          <select id="setting-connection-mode">
+            <option value="enterprise" selected>🏢 Dell Enterprise (ask.dell.com)</option>
+            <option value="demo">🧪 Reviewer Demo Mode (Simulated AI)</option>
+          </select>
+        </label>
+        <div class="settings-note" style="margin-bottom: 8px;">
+          Reviewer Demo Mode simulates live Claude Opus 4.6 and Gemini 3.8 responses for store certification and testing without Dell VPN.
+        </div>
+        <label class="setting-row">
           <span>Default AI Model</span>
           <select id="setting-default-model">
             <option value="claude-opus-4-6" selected>Claude Opus 4.6</option>
@@ -160,6 +202,73 @@
         </button>
         <div id="discovered-models" class="settings-note">
           Queries <code>/api/models</code> on ask.dell.com to detect all accessible models.
+        </div>
+      </div>
+    </div>
+    <div id="share-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <div class="share-header-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <h3>Team Group Chat & Shared Context</h3>
+        </div>
+        <button id="btn-close-share" class="icon-close-btn" aria-label="Close Share">✕</button>
+      </div>
+      <div class="share-content">
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">🔗 Share Active Conversation</span>
+            <span id="share-status-pill" class="share-pill">Private</span>
+          </div>
+          <p class="share-card-desc">Generate a team share link or export a snapshot including active PR diff and thoughts.</p>
+          <div class="share-field">
+            <div class="share-input-group">
+              <input type="text" id="share-link-input" readonly placeholder="Click 'Generate Link' to share this session...">
+              <button id="btn-copy-share-link" class="btn-action-primary" title="Copy share link">📋 Copy</button>
+            </div>
+          </div>
+          <div class="share-btn-row">
+            <button id="btn-generate-share" class="btn-outline">
+              <span>🔗 Generate Team Share Link</span>
+            </button>
+            <button id="btn-export-session" class="btn-outline" title="Export complete session package with PR diff">
+              <span>💾 Export Package</span>
+            </button>
+          </div>
+        </div>
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">📥 Join Teammate's Session</span>
+          </div>
+          <p class="share-card-desc">Enter a Share Code (e.g. <code>AD-PR-342</code>), AskDell URL, or paste session JSON.</p>
+          <div class="share-field">
+            <div class="share-input-group">
+              <input type="text" id="join-session-input" placeholder="Paste Share Code or AskDell URL...">
+              <button id="btn-join-session" class="btn-action-primary">Join</button>
+            </div>
+            <div id="share-feedback" class="share-feedback" style="display: none;"></div>
+          </div>
+          <div class="demo-samples-row">
+            <span class="demo-samples-label">Quick samples:</span>
+            <button class="sample-chip" data-code="AD-PR-342">PR #342 Review</button>
+            <button class="sample-chip" data-code="AD-SEC-88">Security Audit</button>
+          </div>
+        </div>
+        <div class="share-card profile-card">
+          <div class="share-card-header">
+            <span class="share-card-title">👤 Your Collaborator Profile</span>
+          </div>
+          <div class="share-field">
+            <label class="share-label">Your Name / Role</label>
+            <input type="text" id="user-display-name" placeholder="e.g. Ayush (Lead Engineer) or Reviewer" maxlength="40">
+          </div>
+          <div class="settings-note">
+            Your name tags your messages in the shared thread so team members know who asked each question.
+          </div>
         </div>
       </div>
     </div>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AskDell Dev Assistant",
-  "version": "2.1.0",
-  "description": "AI-powered developer assistant via ask.dell.com — analyze code, PRs, docs, and tickets with Claude Opus 4 and Gemini",
+  "version": "2.2.1",
+  "description": "Enterprise AI developer assistant via ask.dell.com — review pull requests, diffs, security, and architecture in your side panel",
   "permissions": [
     "sidePanel",
     "storage",

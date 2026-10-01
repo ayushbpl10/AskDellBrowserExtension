@@ -175,6 +175,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "ASKDELL_SHARE_CHAT") {
+    shareChat(message.chatId)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.type === "ASKDELL_GET_SHARED_CHAT") {
+    getSharedChat(message.shareId)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.type === "ASKDELL_PING_KEEPALIVE") {
     pingKeepAlive()
       .then((ok) => sendResponse({ active: ok }))
@@ -477,6 +491,172 @@ async function getChat(chatId) {
   }
   return await res.json();
 }
+
+async function shareChat(chatId) {
+  try {
+    const res = await fetch(`/api/v1/chats/${encodeURIComponent(chatId)}/share`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const shareId = data.share_id || data.id || chatId;
+
+      // Update access grants so authenticated Dell users can view the shared chat
+      try {
+        await fetch(`/api/v1/chats/shared/${encodeURIComponent(chatId)}/access/update`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            access_grants: [
+              { permission: "read" },
+              { principal_type: "user", principal_id: "*", permission: "read" }
+            ]
+          })
+        });
+        console.log("[AskDell Bridge] Share access grants successfully granted for:", chatId);
+      } catch (grantErr) {
+        console.warn("[AskDell Bridge] Could not update access grants:", grantErr);
+      }
+
+      return {
+        success: true,
+        shareId: shareId,
+        shareUrl: `https://ask.dell.com/s/${shareId}`,
+        data: data
+      };
+    }
+  } catch (e) {
+    console.warn("[AskDell Bridge] /api/v1/chats/share error, falling back to direct ID:", e);
+  }
+
+  // Graceful fallback to direct chat route
+  return {
+    success: true,
+    shareId: chatId,
+    shareUrl: `https://ask.dell.com/c/${chatId}`
+  };
+}
+
+async function getSharedChat(shareId) {
+  let lastStatus = 0;
+  let lastError = null;
+
+  // 1. Try standard shared chat route: GET /api/v1/chats/share/{share_id}
+  try {
+    const res = await fetch(`/api/v1/chats/share/${encodeURIComponent(shareId)}`, {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" }
+    });
+    lastStatus = res.status;
+    if (res.ok) {
+      const data = await res.json();
+      console.log("[AskDell Bridge] Successfully retrieved shared chat via /api/v1/chats/share");
+      return { success: true, chat: data };
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      lastError = errJson.detail || `HTTP ${res.status}`;
+      console.warn(`[AskDell Bridge] /api/v1/chats/share status ${res.status}:`, lastError);
+    }
+  } catch (e) {
+    console.warn("[AskDell Bridge] /api/v1/chats/share fetch error:", e);
+    lastError = e.message;
+  }
+
+  // 2. Try clone shared chat route: POST /api/v1/chats/{share_id}/clone/shared
+  try {
+    const cloneRes = await fetch(`/api/v1/chats/${encodeURIComponent(shareId)}/clone/shared`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      }
+    });
+    if (cloneRes.ok) {
+      const data = await cloneRes.json();
+      console.log("[AskDell Bridge] Successfully cloned shared chat via /clone/shared");
+      return { success: true, chat: data, cloned: true };
+    }
+  } catch (e) {
+    console.warn("[AskDell Bridge] clone/shared fetch error:", e);
+  }
+
+  // 3. Try direct chat route: GET /api/v1/chats/{share_id}
+  try {
+    const directRes = await fetch(`/api/v1/chats/${encodeURIComponent(shareId)}`, {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" }
+    });
+    if (directRes.ok) {
+      const data = await directRes.json();
+      console.log("[AskDell Bridge] Retrieved chat via direct chat route");
+      return { success: true, chat: data };
+    }
+  } catch (e) {
+    console.warn("[AskDell Bridge] /api/v1/chats direct fetch error:", e);
+  }
+
+  // 4. Try extracting chat from active page DOM if the current tab is on the shared chat page
+  try {
+    const domChat = extractChatFromDom();
+    if (domChat && domChat.messages && domChat.messages.length > 0) {
+      console.log("[AskDell Bridge] Extracted shared chat from page DOM");
+      return { success: true, chat: domChat, fromDom: true };
+    }
+  } catch (e) {
+    console.warn("[AskDell Bridge] DOM extraction error:", e);
+  }
+
+  // Specific error messages based on HTTP status
+  if (lastStatus === 401 || lastStatus === 403) {
+    throw new Error(`AskDell Access Prohibited (HTTP ${lastStatus}). Enterprise Open WebUI restrictions require the author to share using 'Export Package' or an updated share link with embedded session.`);
+  } else if (lastStatus === 404) {
+    throw new Error(`Shared session [${shareId}] not found on AskDell (HTTP 404). Verify that the link or code is correct.`);
+  }
+
+  throw new Error(`Unable to retrieve shared chat: ${lastError || "AskDell server error"}. Verify your ask.dell.com session is active.`);
+}
+
+function extractChatFromDom() {
+  const messages = [];
+  const messageElements = document.querySelectorAll("[data-message-id], .chat-message, [id^='message-'], .message");
+  
+  messageElements.forEach((el) => {
+    const isUser = el.classList.contains("user") || el.getAttribute("data-role") === "user" || Boolean(el.querySelector(".user-message"));
+    const contentEl = el.querySelector(".content, .message-content, .prose, .markdown") || el;
+    const content = contentEl?.innerText?.trim();
+    if (content) {
+      messages.push({
+        role: isUser ? "user" : "assistant",
+        author: isUser ? "Teammate" : "Claude Opus 4.6",
+        content: content,
+        timestamp: Math.floor(Date.now() / 1000)
+      });
+    }
+  });
+
+  if (messages.length > 0) {
+    return {
+      id: window.location.pathname.split("/s/")[1]?.split(/[?#/]/)[0] || "shared-chat",
+      title: document.title || "Shared AskDell Session",
+      messages: messages
+    };
+  }
+  return null;
+}
+
 
 // -----------------------------------------------------------
 // Streaming SSE Chat Completion with Dynamic Model Configuration
