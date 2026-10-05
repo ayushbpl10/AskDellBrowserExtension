@@ -341,7 +341,7 @@ test("Sidepanel Module Suite", async (t) => {
   await t.test("9. Session Sharing: compressSessionToHash and decompressSessionFromHash", async () => {
     const pkg = {
       type: "ASKDELL_SHARED_SESSION",
-      version: "2.2.1",
+      version: "2.2.2",
       shareId: "AD-TEST-99",
       title: "Shared Test",
       messages: [{ role: "user", content: "Test question" }]

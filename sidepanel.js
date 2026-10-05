@@ -1367,7 +1367,7 @@ When adding new action handlers, extend the base \`AbstractActionHandler\` class
     return `### 📖 API & Module Documentation
 
 **Module**: \`${title}\`  
-**Version**: \`v2.2.1\`  
+**Version**: \`v2.2.2\`  
 
 ---
 
@@ -2611,7 +2611,7 @@ async function handleGenerateShareLink() {
   // Build complete session package
   const pkg = {
     type: "ASKDELL_SHARED_SESSION",
-    version: "2.2.1",
+    version: "2.2.2",
     shareId: shareCode,
     title: state.pageContext?.title || "AskDell Dev Assistant Session",
     author: state.userName || "Dell Engineer",
@@ -2667,7 +2667,7 @@ function exportSessionPackage() {
 
   const pkg = {
     type: "ASKDELL_SHARED_SESSION",
-    version: "2.2.1",
+    version: "2.2.2",
     shareId: shareCode,
     title: state.pageContext?.title || "AskDell Dev Assistant Session",
     author: state.userName || "Dell Engineer",

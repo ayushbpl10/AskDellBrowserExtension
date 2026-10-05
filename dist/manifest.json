@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AskDell Dev Assistant",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Enterprise AI developer assistant via ask.dell.com — review pull requests, diffs, security, and architecture in your side panel",
   "permissions": [
     "sidePanel",

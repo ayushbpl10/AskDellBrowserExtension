@@ -1,10 +1,10 @@
-# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.2.1
+# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.2.2
 
 > **Status**: Ready for Resubmission  
 > **Item ID**: `emfpgabhdjmfbmfcdnkflcgkcchejfik`  
-> **Package Version**: `2.2.1` (Manifest V3)  
-> **Package File**: `dist/AskDell-Dev-Assistant-v2.2.1.zip`  
-> **Last Updated**: 2026-10-01
+> **Package Version**: `2.2.2` (Manifest V3)  
+> **Package File**: `dist/AskDell-Dev-Assistant-v2.2.2.zip`  
+> **Last Updated**: 2026-10-05
 
 ---
 
@@ -22,34 +22,34 @@
 ```text
 Accelerate your developer workflow with AskDell Dev Assistant.
 
-AskDell Dev Assistant brings the power of enterprise frontier AI directly into your browser side panel via ask.dell.com. Effortlessly review pull requests, inspect unified diffs, run automated OWASP security audits, generate comprehensive unit test suites, and analyze architecture without leaving your repository tabs or copying code back and forth.
+AskDell Dev Assistant brings the power of enterprise frontier AI directly into your browser side panel via ask.dell.com. Effortlessly review pull requests, inspect unified diffs, run automated security audits, generate comprehensive unit test suites, and analyze architecture without leaving your repository tabs or copying code back and forth.
 
 KEY FEATURES
-• Multi-Platform Pull Request Detection: Automatically detects and extracts PR diffs, file trees, and descriptions across GitHub Enterprise (eos2git), GitLab, Azure DevOps, Bitbucket, and Jira.
+• Multi-Platform Code Review Detection: Automatically detects and extracts pull request diffs, changed file trees, and commit details across enterprise git repositories and code review systems.
 • Enterprise AI Model Switching: Seamlessly select between frontier reasoning models, high-speed execution engines, and multimodal architectures configured for your enterprise environment.
 • Collapsible Reasoning & Thinking Blocks: View step-by-step reasoning processes and architectural deliberation for models supporting thought chains.
 • Two-Phase Hybrid Web Search: Live verification of modern library versions, framework updates, and API documentation with real-time status indicators.
 • 12 One-Click Developer Actions:
   - 🔍 Full PR Review: Architecture, logic correctness, edge cases, and line-level feedback.
-  - 🛡️ Security Audit: OWASP Top 10 vulnerabilities, injection, XSS, CSRF, and authorization flaws.
-  - ⚡ Performance: Big-O algorithmic complexity, memory allocations, and N+1 query analysis.
-  - 🧹 Clean Code: SOLID violations, DRY principles, naming conventions, and refactoring tips.
+  - 🛡️ Security Audit: Common vulnerabilities, injection flaws, cross-site scripting risks, and authorization checks.
+  - ⚡ Performance: Algorithmic complexity, memory allocations, and query bottlenecks.
+  - 🧹 Clean Code: Modularity, maintainability, naming conventions, and refactoring tips.
   - 📝 Summarize: High-level technical executive summary of changes and risks.
   - 💡 Explain: Step-by-step logic breakdown for onboarding team members.
-  - 🐛 Debug Issues: Null pointer risks, race conditions, and unhandled exception analysis.
-  - 🧪 Test Cases: Unit test suites, mocks, and boundary tests following AAA pattern.
+  - 🐛 Debug Issues: Potential null pointers, race conditions, and unhandled exception analysis.
+  - 🧪 Test Cases: Unit test suites, mocks, and boundary tests following standard patterns.
   - 📖 Generate Docs: Markdown API documentation, parameters, return types, and usage examples.
-  - ♻️ Refactor: Design patterns (Strategy, Factory, DI) and code simplification.
-  - 🏗️ Architecture: Modularity, coupling/cohesion, separation of concerns, and scalability.
+  - ♻️ Refactor: Design patterns and code simplification suggestions.
+  - 🏗️ Architecture: Modularity, separation of concerns, and scalability best practices.
   - 🔗 API Review: HTTP methods, request/response models, pagination, and error schemas.
-• Native Markdown & Diff Viewer: Colorized syntax highlighting, green/red diff styling, and one-click code copy buttons.
+• Native Markdown & Diff Viewer: Colorized syntax highlighting, visual diff styling, and one-click code copy buttons.
 • Team Collaboration & Session Sharing: Generate shareable encrypted conversation snapshots to collaborate with team members across reviews.
 • Conversation History: Search, browse, and resume previous AskDell discussions directly from the side panel.
 • Enterprise Security: Connects directly with your existing authenticated ask.dell.com session using secure same-origin cookies. Zero third-party servers, zero telemetry.
 
 HOW TO USE IT
 1. Sign in to ask.dell.com in any browser tab.
-2. Navigate to your pull request or code repository on GitHub, GitLab, Azure DevOps, or Bitbucket.
+2. Navigate to any pull request, code diff, or repository page in your browser.
 3. Click the extension icon in your toolbar to open the Side Panel.
 4. Click any quick action button (e.g. "Full PR Review" or "Security Audit") or ask a custom question.
 
@@ -119,7 +119,7 @@ Google reviewers require a specific, plain-English justification for every decla
 | `scripting` | permission | Extracts code diffs, file trees, and pull request descriptions from active developer web pages when requested by the user. |
 | `contextMenus` | permission | Adds right-click options ('AskDell: Review Selection', 'AskDell: Review PR / Diff') to send code directly to the assistant. |
 | `https://ask.dell.com/*` | host_permission | Connects to ask.dell.com to communicate with the enterprise AI backend using the user's active session cookies. |
-| `https://*/*`, `http://*/*` | host_permission | Extracts pull request diffs and repository code on internal and external Git hosting platforms (GitHub, GitLab, Azure DevOps, Bitbucket). |
+| `https://*/*`, `http://*/*` | host_permission | Extracts pull request diffs and repository code on web-based code review platforms upon explicit user action. |
 
 ---
 

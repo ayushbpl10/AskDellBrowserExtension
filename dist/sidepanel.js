@@ -1092,7 +1092,7 @@ When adding new action handlers, extend the base \`AbstractActionHandler\` class
   if (pLower.includes("api and module documentation") || pLower.includes("document")) {
     return `### 📖 API & Module Documentation
 **Module**: \`${title}\`
-**Version**: \`v2.2.1\`
+**Version**: \`v2.2.2\`
 ---
 #### Methods Specification
 ##### \`processAnalysis(context: ContextPayload): Promise<AnalysisResult>\`
@@ -2116,7 +2116,7 @@ async function handleGenerateShareLink() {
   state.isShared = true;
   const pkg = {
     type: "ASKDELL_SHARED_SESSION",
-    version: "2.2.1",
+    version: "2.2.2",
     shareId: shareCode,
     title: state.pageContext?.title || "AskDell Dev Assistant Session",
     author: state.userName || "Dell Engineer",
@@ -2164,7 +2164,7 @@ function exportSessionPackage() {
   updateSharedContextBadge(shareCode);
   const pkg = {
     type: "ASKDELL_SHARED_SESSION",
-    version: "2.2.1",
+    version: "2.2.2",
     shareId: shareCode,
     title: state.pageContext?.title || "AskDell Dev Assistant Session",
     author: state.userName || "Dell Engineer",
