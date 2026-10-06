@@ -11,8 +11,6 @@ const vm = require("node:vm");
 const { MockChrome } = require("./mock_chrome");
 
 function loadSidepanelContext(mockChrome, initialHtml = "") {
-  let sidepanelJs = fs.readFileSync(path.resolve(__dirname, "../sidepanel.js"), "utf-8");
-
   // DOM Mock Element Factory
   class MockElement {
     constructor(tagName = "div") {
@@ -107,6 +105,12 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     blur() {}
     scrollIntoView() {}
     remove() {}
+    closest(sel) {
+      if (!sel) return null;
+      if (sel.startsWith(".") && this.classList.contains(sel.slice(1))) return this;
+      if (sel.startsWith("#") && this.id === sel.slice(1)) return this;
+      return new MockElement("div");
+    }
   }
 
   // Pre-seed elements mapped by ID
@@ -136,8 +140,11 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     "prompt-input": new MockElement("textarea"),
     "char-counter": new MockElement("span"),
     "messages": new MockElement("div"),
-    "welcome-card": new MockElement("div"),
+    "theme-icon": new MockElement("span"),
+    "btn-theme": new MockElement("button"),
     "history-panel": new MockElement("div"),
+    "history-list": new MockElement("div"),
+    "btn-copy-share-link": new MockElement("button"),
     "settings-panel": new MockElement("div"),
     "share-panel": new MockElement("div"),
     "share-link-input": new MockElement("input"),
@@ -197,124 +204,86 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
   elementMap["arena-panel"].style.display = "none";
   elementMap["command-palette"].style.display = "none";
 
-  const sandbox = {
-    chrome: mockChrome,
-    document: {
-      documentElement: new MockElement("html"),
-      body: new MockElement("body"),
-      title: "AskDell Dev Assistant",
-      getElementById: (id) => elementMap[id] || null,
-      querySelector: (sel) => {
-        if (sel.startsWith("#")) return elementMap[sel.slice(1)] || null;
-        if (sel === ".auth-card-secondary-row") return new MockElement("div");
-        if (sel.includes("test-framework")) {
-          const el = new MockElement("input");
-          el.value = "Jest / Vitest";
-          return el;
-        }
-        return new MockElement("div");
-      },
-      querySelectorAll: (sel) => {
-        if (sel === ".cmd-palette-item") {
-          return elementMap["cmd-palette-list"]?.children || [];
-        }
-        return [];
-      },
-      createElement: (tag) => new MockElement(tag),
-      addEventListener: () => {}
-    },
-    window: {
-      location: { href: "chrome-extension://id/sidepanel.html" },
-      matchMedia: () => ({ matches: false }),
-      scrollTo: () => {}
-    },
-    navigator: {
-      clipboard: {
-        lastCopied: "",
-        writeText: (t) => {
-          sandbox.navigator.clipboard.lastCopied = t;
-          return Promise.resolve();
-        }
+  const docListeners = {};
+  global.chrome = mockChrome;
+  global.document = {
+    documentElement: new MockElement("html"),
+    body: new MockElement("body"),
+    title: "AskDell Dev Assistant",
+    getElementById: (id) => elementMap[id] || (elementMap[id] = new MockElement("div")),
+    querySelector: (sel) => {
+      if (sel.startsWith("#")) {
+        const id = sel.slice(1);
+        if (!elementMap[id]) elementMap[id] = new MockElement("div");
+        return elementMap[id];
       }
+      if (sel === ".auth-card-secondary-row") return new MockElement("div");
+      if (sel.includes("test-framework")) {
+        const el = new MockElement("input");
+        el.value = "Jest / Vitest";
+        return el;
+      }
+      return new MockElement("div");
     },
-    URL: {
-      createObjectURL: () => "blob:mock-url-" + Date.now(),
-      revokeObjectURL: () => {}
+    querySelectorAll: (sel) => {
+      if (sel === ".cmd-palette-item") {
+        return elementMap["cmd-palette-list"]?.children || [];
+      }
+      return [];
     },
-    console: {
-      log: () => {},
-      warn: () => {},
-      error: () => {}
+    createElement: (tag) => new MockElement(tag),
+    addEventListener: (event, fn) => {
+      if (!docListeners[event]) docListeners[event] = [];
+      docListeners[event].push(fn);
     },
-    Event: class { constructor(type) { this.type = type; } },
-    TextEncoder: TextEncoder,
-    TextDecoder: TextDecoder,
-    btoa: (s) => Buffer.from(s, "binary").toString("base64"),
-    atob: (s) => Buffer.from(s, "base64").toString("binary"),
-    Blob: Blob,
-    Response: Response,
-    Uint8Array: Uint8Array,
-    setTimeout: (fn, ms) => fn(),
-    setInterval: () => {},
-    clearInterval: () => {},
-    CompressionStream: typeof CompressionStream !== "undefined" ? CompressionStream : undefined,
-    DecompressionStream: typeof DecompressionStream !== "undefined" ? DecompressionStream : undefined,
-    elementMap
+    dispatchEvent: (evt) => {
+      const list = docListeners[evt.type] || [];
+      for (const fn of list) fn(evt);
+    }
   };
+  global.window = {
+    location: { href: "chrome-extension://id/sidepanel.html" },
+    matchMedia: () => ({ matches: false }),
+    scrollTo: () => {},
+    addEventListener: (event, fn) => {
+      if (!docListeners[event]) docListeners[event] = [];
+      docListeners[event].push(fn);
+    },
+    removeEventListener: () => {}
+  };
+  const mockClipboard = {
+    lastCopied: "",
+    writeText: (t) => {
+      mockClipboard.lastCopied = t;
+      return Promise.resolve();
+    }
+  };
+  Object.defineProperty(global, "navigator", {
+    value: { clipboard: mockClipboard },
+    configurable: true,
+    writable: true
+  });
+  global.URL = {
+    createObjectURL: () => "blob:mock-url-" + Date.now(),
+    revokeObjectURL: () => {}
+  };
+  global.Event = class { constructor(type) { this.type = type; } };
+  global.btoa = (s) => Buffer.from(s, "binary").toString("base64");
+  global.atob = (s) => Buffer.from(s, "base64").toString("binary");
 
-  sidepanelJs += `
-    ;Object.assign(this, {
-      state,
-      MODEL_META,
-      MODEL_CONTEXT_WINDOWS,
-      DEFAULT_CUSTOM_ACTIONS,
-      NOISY_FILE_EXTENSIONS,
-      getModelMetadata,
-      escapeHtml,
-      renderMarkdown,
-      renderMarkdownTables,
-      formatTabContent,
-      applyConnectionState,
-      initConnectionMonitoring,
-      findAskDellTab,
-      refreshAskDellStatus,
-      generateDemoResponse,
-      compressSessionToHash,
-      decompressSessionFromHash,
-      handleJoinSession,
-      isNoisyFile,
-      sanitizeDiffNoise,
-      estimateTokens,
-      updateTokenMeter,
-      loadCustomActions,
-      renderCustomActions,
-      saveCustomAction,
-      deleteCustomAction,
-      downloadMarkdownReport,
-      copyAsPRComment,
-      copyAsJiraComment,
-      closeAllDrawers,
-      loadSessionFromPackage,
-      formatPrSuggestion,
-      trimCiLogs,
-      initCommandPalette,
-      toggleCommandPalette,
-      openCommandPalette,
-      closeCommandPalette,
-      renderFilteredCommands,
-      executeCommandPaletteItem,
-      toggleTestSynthesizerDrawer,
-      handleRunTestSynthesizer,
-      toggleArenaDrawer,
-      handleRunArena,
-      COMMAND_CATALOG,
-      executeQuickAction
-    });
-  `;
+  const origSetInterval = global.setInterval;
+  const origSetTimeout = global.setTimeout;
+  global.setInterval = () => ({ unref: () => {} });
+  global.setTimeout = (fn) => { fn(); return 1; };
 
-  vm.createContext(sandbox);
-  vm.runInContext(sidepanelJs, sandbox);
-  return sandbox;
+  delete require.cache[require.resolve("../sidepanel.js")];
+  const sp = require("../sidepanel.js");
+  sp.elementMap = elementMap;
+  sp.navigator = global.navigator;
+  sp.docListeners = docListeners;
+  global.setInterval = origSetInterval;
+  global.setTimeout = origSetTimeout;
+  return sp;
 }
 
 test("Sidepanel Module Suite", async (t) => {
@@ -822,6 +791,197 @@ test("Sidepanel Module Suite", async (t) => {
     const messagesEl = sp.elementMap["messages"];
     const arenaWrapper = messagesEl.children.find(c => c.classList.contains("arena-wrapper"));
     assert.ok(arenaWrapper, "Messages must contain arena-wrapper element");
+  });
+
+  await t.test("19. Full DOMContentLoaded Lifecycle: Runs initializations safely", async () => {
+    // Set mock tabs and storage for initial bootstrap
+    mock.tabsList = [{ id: 10, active: true, url: "https://github.com/org/repo/pull/1" }];
+    mock.storageData.themePreference = "dark";
+    mock.storageData.settings = { model: "claude-opus-4-6", connectionMode: "demo" };
+
+    if (sp.docListeners["DOMContentLoaded"]) {
+      for (const fn of sp.docListeners["DOMContentLoaded"]) {
+        await fn();
+      }
+    }
+
+    assert.ok(sp.state.settings);
+    assert.strictEqual(sp.state.settings.model, "claude-opus-4-6");
+  });
+
+  await t.test("20. Theme Management: initTheme, toggleTheme and updateThemeIcon", () => {
+    mock.storageData.themePreference = "dark";
+    sp.initTheme();
+
+    // Toggle to light
+    sp.toggleTheme();
+    assert.strictEqual(global.document.documentElement.getAttribute("data-theme"), "light");
+    assert.strictEqual(mock.storageData.themePreference, "light");
+
+    // Toggle back to dark
+    sp.toggleTheme();
+    assert.strictEqual(global.document.documentElement.getAttribute("data-theme"), "dark");
+    assert.strictEqual(mock.storageData.themePreference, "dark");
+  });
+
+  await t.test("21. Settings Drawer & Migration: loadSettings and saveSettings", async () => {
+    // 21a: Toggle drawer
+    sp.elementMap["settings-panel"].style.display = "none";
+    sp.toggleSettingsDrawer();
+    assert.strictEqual(sp.elementMap["settings-panel"].style.display, "flex");
+    sp.toggleSettingsDrawer();
+    assert.strictEqual(sp.elementMap["settings-panel"].style.display, "none");
+
+    // 21b: Legacy model migration from claude-opus to claude-opus-4-6
+    mock.storageData.settings = { model: "claude-opus", autoWebSearch: false };
+    await sp.loadSettings();
+    assert.strictEqual(sp.state.settings.model, "claude-opus-4-6");
+    assert.strictEqual(sp.state.settings.autoWebSearch, false);
+
+    // 21c: saveSettings
+    sp.saveSettings();
+    assert.ok(mock.storageData.settings);
+  });
+
+  await t.test("22. Context Menu Pending Actions and Incoming Action Dispatcher", async () => {
+    // 22a: ANALYZE_SELECTION
+    mock.storageData.pendingAction = { type: "ANALYZE_SELECTION", text: "const token = 'xyz';" };
+    sp.state.demoMode = true;
+    await sp.checkPendingAction();
+    assert.strictEqual(mock.storageData.pendingAction, undefined); // removed from storage
+
+    // 22b: EXPLAIN_SELECTION
+    mock.storageData.pendingAction = { type: "EXPLAIN_SELECTION", text: "async function connect() {}" };
+    await sp.checkPendingAction();
+
+    // 22c: ANALYZE_PAGE
+    mock.storageData.pendingAction = {
+      type: "ANALYZE_PAGE",
+      content: { platform: "gitlab", title: "GitLab MR !9", type: "merge_request", diff: "+ test" }
+    };
+    await sp.checkPendingAction();
+    assert.strictEqual(sp.state.pageContext.platform, "gitlab");
+  });
+
+  await t.test("23. Context Scanning and Context Bar UI Updates", async () => {
+    // Scan with active tab content
+    mock.tabsList = [{ id: 1, active: true, url: "https://jira.dell.com/browse/DEV-1" }];
+    await sp.scanActiveTabContext();
+
+    // Update UI across various platforms
+    sp.updateContextBarUI({ platform: "jira", type: "ticket", title: "DEV-100", body: "Ticket description" });
+    assert.strictEqual(sp.elementMap["detected-title"].textContent, "DEV-100");
+
+    sp.updateContextBarUI({ platform: "ci_logs", type: "logs", title: "Build #10", logs: "error: test failed" });
+    assert.strictEqual(sp.elementMap["detected-title"].textContent, "Build #10");
+
+    sp.updateContextBarUI({ platform: "confluence", type: "documentation", title: "Arch Wiki", body: "Architecture" });
+    assert.strictEqual(sp.elementMap["detected-title"].textContent, "Arch Wiki");
+  });
+
+  await t.test("24. Runtime Message Listener in Sidepanel", () => {
+    sp.setupMessageListeners();
+    const listener = mock.messageListeners[0];
+    assert.ok(listener);
+
+    // Incoming page analysis
+    listener({ type: "ANALYZE_PAGE", content: { platform: "github", title: "PR #5", type: "pull_request" } });
+    assert.strictEqual(sp.state.pageContext.platform, "github");
+
+    // Connection status change
+    listener({ type: "ASKDELL_CONNECTION_STATUS", connection: { status: "connected" } });
+    assert.strictEqual(sp.state.connection.status, "connected");
+
+    // Session expired
+    listener({ type: "ASKDELL_SESSION_EXPIRED" });
+    assert.strictEqual(sp.state.connection.status, "unauthenticated");
+
+    // Session active
+    listener({ type: "ASKDELL_SESSION_ACTIVE" });
+    assert.strictEqual(sp.state.connection.status, "connected");
+  });
+
+  await t.test("25. Quick Actions & Chat Submission Guards", async () => {
+    sp.state.demoMode = false;
+    sp.state.connection = { status: "unauthenticated" };
+
+    // Submission guard when unauthenticated
+    await sp.handleUserSubmission("Review code", false);
+    const toast = sp.elementMap["toast-notification"];
+    assert.ok(toast.textContent.includes("Authentication required"));
+
+    // Submission guard when not open
+    sp.state.connection = { status: "not_open" };
+    await sp.handleUserSubmission("Review code", false);
+    assert.ok(toast.textContent.includes("ask.dell.com tab not detected"));
+
+    // Quick actions execution in demo mode
+    sp.state.demoMode = true;
+    sp.executeQuickAction("security");
+    assert.ok(sp.state.messages.length > 0);
+
+    sp.executeQuickAction("ci-diagnose");
+    sp.executeQuickAction("performance");
+    sp.executeQuickAction("clean-code");
+    sp.executeQuickAction("debug");
+    sp.executeQuickAction("test-cases");
+    sp.executeQuickAction("document");
+    sp.executeQuickAction("refactor");
+    sp.executeQuickAction("architecture");
+    sp.executeQuickAction("api-review");
+  });
+
+  await t.test("26. History Drawer Management: toggle, filter, load, and new chat", async () => {
+    sp.state.demoMode = true;
+
+    // Toggle drawer
+    sp.elementMap["history-panel"].style.display = "none";
+    await sp.toggleHistoryDrawer();
+    assert.strictEqual(sp.elementMap["history-panel"].style.display, "flex");
+
+    // Filter history list
+    sp.filterHistoryList("PR #342");
+    sp.filterHistoryList("nonexistent-filter-query");
+
+    // Load chat from history
+    sp.loadChatFromHistory("demo-pr-342");
+    assert.strictEqual(sp.state.chatId, "demo-pr-342");
+
+    // Start new chat
+    sp.startNewChat();
+    assert.strictEqual(sp.state.chatId, null);
+    assert.strictEqual(sp.state.messages.length, 0);
+  });
+
+  await t.test("27. Share Drawer & Session Export Controls", async () => {
+    // Toggle share panel
+    sp.elementMap["share-panel"].style.display = "none";
+    sp.toggleSharePanel();
+    assert.strictEqual(sp.elementMap["share-panel"].style.display, "flex");
+
+    // Copy share link when link is present
+    sp.elementMap["share-link-input"].value = "https://ask.dell.com/s/valid-token";
+    sp.copyShareLink();
+    const toast = sp.elementMap["toast-notification"];
+    assert.ok(toast.textContent.includes("copied"));
+
+    // Copy share link when link is empty and no messages exist
+    sp.elementMap["share-link-input"].value = "";
+    sp.state.messages = [];
+    sp.state.chatId = null;
+    sp.copyShareLink();
+    assert.ok(toast.textContent.includes("Please send a message"));
+
+    // Export session package
+    sp.state.messages = [{ role: "user", content: "Test query" }];
+    sp.exportSessionPackage();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(toast.textContent.includes("Session Package") || toast.textContent.includes("copied"));
+
+    // Stop active stream
+    sp.state.isStreaming = true;
+    sp.stopActiveStream();
+    assert.strictEqual(sp.state.isStreaming, false);
   });
 });
 

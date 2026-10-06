@@ -597,3 +597,14 @@ function extractPageContent() {
     isPR: false
   };
 }
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    checkAskDellConnection,
+    updateConnectionStatus,
+    openOrFocusAskDellTab,
+    extractPageContent,
+    get askDellConnection() { return askDellConnection; },
+    set askDellConnection(v) { askDellConnection = v; }
+  };
+}

@@ -336,19 +336,22 @@ function initTheme() {
     }
   });
 
-  $("#btn-theme").addEventListener("click", () => {
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-    const isDark = currentTheme === "dark" || (!currentTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    const newTheme = isDark ? "light" : "dark";
-    
-    document.documentElement.setAttribute("data-theme", newTheme);
-    chrome.storage.local.set({ themePreference: newTheme });
-    updateThemeIcon(newTheme);
-  });
+  $("#btn-theme")?.addEventListener("click", toggleTheme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme");
+  const isDark = currentTheme === "dark" || (!currentTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const newTheme = isDark ? "light" : "dark";
+  
+  document.documentElement.setAttribute("data-theme", newTheme);
+  chrome.storage.local.set({ themePreference: newTheme });
+  updateThemeIcon(newTheme);
 }
 
 function updateThemeIcon(theme) {
   const icon = $("#theme-icon");
+  if (!icon) return;
   if (theme === "dark") {
     icon.innerHTML = `<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>`;
   } else {
@@ -882,34 +885,31 @@ function setupEventListeners() {
   });
 
   // Re-scan context
-  $("#btn-refresh-context").addEventListener("click", () => {
+  $("#btn-refresh-context")?.addEventListener("click", () => {
     scanActiveTabContext();
   });
 
   // Stop Generation buttons
-  $("#btn-stop-stream").addEventListener("click", stopActiveStream);
-  $("#btn-stop").addEventListener("click", stopActiveStream);
+  $("#btn-stop-stream")?.addEventListener("click", stopActiveStream);
+  $("#btn-stop")?.addEventListener("click", stopActiveStream);
 
   // New Chat button
-  $("#btn-new-chat").addEventListener("click", startNewChat);
+  $("#btn-new-chat")?.addEventListener("click", startNewChat);
 
   // History Drawer toggle
-  $("#btn-history").addEventListener("click", toggleHistoryDrawer);
-  $("#btn-close-history").addEventListener("click", () => {
-    $("#history-panel").style.display = "none";
+  $("#btn-history")?.addEventListener("click", toggleHistoryDrawer);
+  $("#btn-close-history")?.addEventListener("click", () => {
+    const hp = $("#history-panel");
+    if (hp) hp.style.display = "none";
   });
 
   // Settings Drawer toggle
-  $("#btn-settings").addEventListener("click", () => {
-    const panel = $("#settings-panel");
-    const isHidden = panel.style.display === "none";
-    closeAllDrawers();
-    panel.style.display = isHidden ? "flex" : "none";
-  });
+  $("#btn-settings")?.addEventListener("click", toggleSettingsDrawer);
 
-  $("#btn-close-settings").addEventListener("click", () => {
+  $("#btn-close-settings")?.addEventListener("click", () => {
     saveSettings();
-    $("#settings-panel").style.display = "none";
+    const sp = $("#settings-panel");
+    if (sp) sp.style.display = "none";
   });
 
   // Group Chat & Share Drawer toggle
@@ -2495,6 +2495,7 @@ async function toggleHistoryDrawer() {
 
 function renderHistoryList(historyData) {
   const list = $("#history-list");
+  if (!list) return;
   list.innerHTML = "";
 
   const items = Array.isArray(historyData) ? historyData : (historyData?.chats || historyData?.data || []);
@@ -3450,6 +3451,16 @@ function toggleCustomActionsDrawer() {
   }
 }
 
+function toggleSettingsDrawer() {
+  const panel = $("#settings-panel");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  closeAllDrawers();
+  if (isHidden) {
+    panel.style.display = "flex";
+  }
+}
+
 // ============================================================
 // EXPORT & REPORTING SUITE
 // ============================================================
@@ -3929,6 +3940,94 @@ async function handleRunArena() {
       updateTokenMeter();
     }
   }
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    state,
+    MODEL_META,
+    MODEL_CONTEXT_WINDOWS,
+    DEFAULT_CUSTOM_ACTIONS,
+    COMMAND_CATALOG,
+    NOISY_FILE_EXTENSIONS,
+    DEMO_HISTORY_ITEMS,
+    DEMO_SHARED_SESSIONS,
+    isNoisyFile,
+    sanitizeDiffNoise,
+    formatPrSuggestion,
+    trimCiLogs,
+    estimateTokens,
+    getModelMetadata,
+    escapeHtml,
+    renderMarkdown,
+    renderMarkdownTables,
+    formatCodeBlock,
+    attachCodeBlockCopyButtons,
+    formatTabContent,
+    applyConnectionState,
+    initConnectionMonitoring,
+    findAskDellTab,
+    refreshAskDellStatus,
+    generateDemoResponse,
+    compressSessionToHash,
+    decompressSessionFromHash,
+    handleJoinSession,
+    loadSessionFromPackage,
+    loadCustomActions,
+    renderCustomActions,
+    saveCustomAction,
+    deleteCustomAction,
+    toggleCustomActionsDrawer,
+    downloadMarkdownReport,
+    copyAsPRComment,
+    copyAsJiraComment,
+    toggleExportDrawer,
+    closeAllDrawers,
+    updateTokenMeter,
+    initCommandPalette,
+    toggleCommandPalette,
+    openCommandPalette,
+    closeCommandPalette,
+    renderFilteredCommands,
+    executeCommandPaletteItem,
+    selectModelFromPalette,
+    toggleTestSynthesizerDrawer,
+    handleRunTestSynthesizer,
+    toggleArenaDrawer,
+    handleRunArena,
+    executeQuickAction,
+    handleUserSubmission,
+    runStreamInDemoMode,
+    stopActiveStream,
+    renderUserMessage,
+    createAssistantStreamingCard,
+    updateAssistantStreamingContent,
+    finalizeStreamingCard,
+    showNotification,
+    showToastNotification,
+    toggleHistoryDrawer,
+    renderHistoryList,
+    filterHistoryList,
+    loadChatFromHistory,
+    startNewChat,
+    toggleSharePanel,
+    handleGenerateShareLink,
+    copyShareLink,
+    exportSessionPackage,
+    toggleSettingsDrawer,
+    loadSettings,
+    saveSettings,
+    discoverModels,
+    initTheme,
+    toggleTheme,
+    updateThemeIcon,
+    checkPendingAction,
+    scanActiveTabContext,
+    updateContextBarUI,
+    setupMessageListeners,
+    setupEventListeners,
+    updateCharCounter
+  };
 }
 
 
