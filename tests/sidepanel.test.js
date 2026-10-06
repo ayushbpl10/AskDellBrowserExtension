@@ -27,6 +27,8 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       this.attributes = {};
       this.listeners = {};
       this.children = [];
+      this.value = "";
+      this.dataset = {};
       this._textContent = "";
       this._innerHTML = "";
     }
@@ -52,6 +54,7 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     set innerHTML(val) {
       this._innerHTML = String(val);
       this._textContent = String(val).replace(/<[^>]+>/g, "");
+      this.children = [];
     }
 
     getAttribute(name) {
@@ -75,7 +78,15 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     }
 
     querySelector(sel) {
-      return null;
+      for (const child of this.children) {
+        if (sel.startsWith(".") && child.classList.contains(sel.slice(1))) return child;
+        if (sel.startsWith("#") && child.id === sel.slice(1)) return child;
+        const found = child.querySelector?.(sel);
+        if (found) return found;
+      }
+      const el = new MockElement("div");
+      if (sel.startsWith(".")) el.className = sel.slice(1);
+      return el;
     }
     querySelectorAll(sel) {
       return [];
@@ -84,11 +95,25 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       this.children.push(child);
       return child;
     }
+    removeChild(child) {
+      const idx = this.children.indexOf(child);
+      if (idx !== -1) this.children.splice(idx, 1);
+      return child;
+    }
+    click() {
+      this.dispatchEvent({ type: "click" });
+    }
+    focus() {}
+    blur() {}
+    scrollIntoView() {}
     remove() {}
   }
 
   // Pre-seed elements mapped by ID
   const elementMap = {
+    "btn-send": new MockElement("button"),
+    "btn-stop": new MockElement("button"),
+    "streaming-controls": new MockElement("div"),
     "connection-status-dot": new MockElement("span"),
     "auth-banner": new MockElement("div"),
     "auth-banner-badge": new MockElement("div"),
@@ -121,8 +146,56 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     "join-session-input": new MockElement("input"),
     "btn-join-session": new MockElement("button"),
     "share-feedback": new MockElement("div"),
-    "toast-notification": new MockElement("div")
+    "toast-notification": new MockElement("div"),
+    "token-meter-badge": new MockElement("span"),
+    "custom-actions-container": new MockElement("div"),
+    "btn-add-custom-action": new MockElement("button"),
+    "btn-export-menu": new MockElement("button"),
+    "export-panel": new MockElement("div"),
+    "custom-action-panel": new MockElement("div"),
+    "setting-noise-filter": new MockElement("input"),
+    "custom-actions-list": new MockElement("div"),
+    "custom-actions-count": new MockElement("span"),
+    "custom-action-title": new MockElement("input"),
+    "custom-action-emoji": new MockElement("input"),
+    "custom-action-prompt": new MockElement("textarea"),
+    "btn-save-custom-action": new MockElement("button"),
+    "btn-download-md": new MockElement("button"),
+    "btn-copy-pr-comment": new MockElement("button"),
+    "btn-copy-jira-comment": new MockElement("button"),
+    "btn-arena": new MockElement("button"),
+    "btn-close-arena": new MockElement("button"),
+    "btn-run-arena": new MockElement("button"),
+    "arena-panel": new MockElement("div"),
+    "arena-model-a": new MockElement("select"),
+    "arena-model-b": new MockElement("select"),
+    "arena-prompt-input": new MockElement("textarea"),
+    "btn-open-test-builder": new MockElement("button"),
+    "btn-close-test-synthesizer": new MockElement("button"),
+    "btn-run-test-synthesizer": new MockElement("button"),
+    "test-synthesizer-panel": new MockElement("div"),
+    "test-strat-boundary": new MockElement("input"),
+    "test-strat-mocks": new MockElement("input"),
+    "test-strat-table": new MockElement("input"),
+    "test-strat-errors": new MockElement("input"),
+    "test-custom-notes": new MockElement("textarea"),
+    "btn-cmd-palette": new MockElement("button"),
+    "btn-close-cmd-palette": new MockElement("button"),
+    "command-palette": new MockElement("div"),
+    "cmd-palette-input": new MockElement("input"),
+    "cmd-palette-list": new MockElement("div")
   };
+
+  elementMap["arena-model-a"].value = "claude-opus-4-6";
+  elementMap["arena-model-b"].value = "gemini-3.8-flash";
+  elementMap["arena-prompt-input"].value = "Full PR Review: evaluate architecture, correctness, logic flaws, and optimizations.";
+  elementMap["test-strat-boundary"].checked = true;
+  elementMap["test-strat-mocks"].checked = true;
+  elementMap["test-strat-table"].checked = true;
+  elementMap["test-strat-errors"].checked = true;
+  elementMap["test-synthesizer-panel"].style.display = "none";
+  elementMap["arena-panel"].style.display = "none";
+  elementMap["command-palette"].style.display = "none";
 
   const sandbox = {
     chrome: mockChrome,
@@ -134,9 +207,19 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       querySelector: (sel) => {
         if (sel.startsWith("#")) return elementMap[sel.slice(1)] || null;
         if (sel === ".auth-card-secondary-row") return new MockElement("div");
-        return null;
+        if (sel.includes("test-framework")) {
+          const el = new MockElement("input");
+          el.value = "Jest / Vitest";
+          return el;
+        }
+        return new MockElement("div");
       },
-      querySelectorAll: (sel) => [],
+      querySelectorAll: (sel) => {
+        if (sel === ".cmd-palette-item") {
+          return elementMap["cmd-palette-list"]?.children || [];
+        }
+        return [];
+      },
       createElement: (tag) => new MockElement(tag),
       addEventListener: () => {}
     },
@@ -147,8 +230,16 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     },
     navigator: {
       clipboard: {
-        writeText: (t) => Promise.resolve()
+        lastCopied: "",
+        writeText: (t) => {
+          sandbox.navigator.clipboard.lastCopied = t;
+          return Promise.resolve();
+        }
       }
+    },
+    URL: {
+      createObjectURL: () => "blob:mock-url-" + Date.now(),
+      revokeObjectURL: () => {}
     },
     console: {
       log: () => {},
@@ -175,6 +266,9 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     ;Object.assign(this, {
       state,
       MODEL_META,
+      MODEL_CONTEXT_WINDOWS,
+      DEFAULT_CUSTOM_ACTIONS,
+      NOISY_FILE_EXTENSIONS,
       getModelMetadata,
       escapeHtml,
       renderMarkdown,
@@ -187,7 +281,34 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       generateDemoResponse,
       compressSessionToHash,
       decompressSessionFromHash,
-      handleJoinSession
+      handleJoinSession,
+      isNoisyFile,
+      sanitizeDiffNoise,
+      estimateTokens,
+      updateTokenMeter,
+      loadCustomActions,
+      renderCustomActions,
+      saveCustomAction,
+      deleteCustomAction,
+      downloadMarkdownReport,
+      copyAsPRComment,
+      copyAsJiraComment,
+      closeAllDrawers,
+      loadSessionFromPackage,
+      formatPrSuggestion,
+      trimCiLogs,
+      initCommandPalette,
+      toggleCommandPalette,
+      openCommandPalette,
+      closeCommandPalette,
+      renderFilteredCommands,
+      executeCommandPaletteItem,
+      toggleTestSynthesizerDrawer,
+      handleRunTestSynthesizer,
+      toggleArenaDrawer,
+      handleRunArena,
+      COMMAND_CATALOG,
+      executeQuickAction
     });
   `;
 
@@ -354,4 +475,353 @@ test("Sidepanel Module Suite", async (t) => {
     assert.deepStrictEqual(decoded.shareId, pkg.shareId);
     assert.strictEqual(decoded.messages[0].content, "Test question");
   });
+
+  await t.test("9b. Joining a shared session auto-closes settings panel & overlay drawers and reveals messages", async () => {
+    // Open settings drawer and share drawer
+    sp.elementMap["settings-panel"].style.display = "flex";
+    sp.elementMap["share-panel"].style.display = "flex";
+    sp.elementMap["history-panel"].style.display = "flex";
+
+    const pkg = {
+      type: "ASKDELL_SHARED_SESSION",
+      version: "2.2.2",
+      shareId: "AD-PR-404",
+      title: "PR Architecture Review",
+      messages: [
+        { role: "user", author: "Lead Architect", content: "Is the new caching tier idempotent?" },
+        { role: "assistant", author: "Claude Opus 4.6", content: "Yes, cache operations use hash keys with atomic set-nx." }
+      ]
+    };
+
+    await sp.handleJoinSession(JSON.stringify(pkg));
+
+    // Verify settings panel and all overlay panels are auto-closed
+    assert.strictEqual(sp.elementMap["settings-panel"].style.display, "none", "Settings panel must auto close on join");
+    assert.strictEqual(sp.elementMap["share-panel"].style.display, "none", "Share panel must auto close on join");
+    assert.strictEqual(sp.elementMap["history-panel"].style.display, "none", "History panel must auto close on join");
+
+    // Verify state and chats are visible to user
+    assert.strictEqual(sp.state.isShared, true);
+    assert.strictEqual(sp.state.shareId, "AD-PR-404");
+    assert.strictEqual(sp.state.messages.length, 2);
+    assert.strictEqual(sp.state.messages[0].content, "Is the new caching tier idempotent?");
+    assert.strictEqual(sp.state.messages[1].content, "Yes, cache operations use hash keys with atomic set-nx.");
+
+    // Verify shared badge is active
+    assert.strictEqual(sp.elementMap["shared-session-badge"].style.display, "inline-flex");
+    assert.ok(sp.elementMap["shared-session-badge"].textContent.includes("AD-PR-404"));
+  });
+
+  await t.test("10. Smart Noise Filter: isNoisyFile and sanitizeDiffNoise", () => {
+    // Check known noisy patterns
+    assert.strictEqual(sp.isNoisyFile("package-lock.json"), true);
+    assert.strictEqual(sp.isNoisyFile("yarn.lock"), true);
+    assert.strictEqual(sp.isNoisyFile("pnpm-lock.yaml"), true);
+    assert.strictEqual(sp.isNoisyFile("dist/bundle.min.js"), true);
+    assert.strictEqual(sp.isNoisyFile("app.chunk.js"), true);
+    assert.strictEqual(sp.isNoisyFile("source.map"), true);
+    assert.strictEqual(sp.isNoisyFile("src/services/api.ts"), false);
+    assert.strictEqual(sp.isNoisyFile("components/Header.jsx"), false);
+
+    // Diff noise sanitization
+    const noisyDiff = [
+      "diff --git a/package-lock.json b/package-lock.json",
+      "index 1111111..2222222 100644",
+      "--- a/package-lock.json",
+      "+++ b/package-lock.json",
+      "@@ -1,5 +1,5 @@",
+      '+   "integrity": "sha512-..."',
+      "diff --git a/src/index.ts b/src/index.ts",
+      "index 3333333..4444444 100644",
+      "--- a/src/index.ts",
+      "+++ b/src/index.ts",
+      "@@ -1,3 +1,3 @@",
+      "+ console.log('clean code');"
+    ].join("\n");
+
+    const cleaned = sp.sanitizeDiffNoise(noisyDiff);
+    assert.ok(!cleaned.includes("package-lock.json"));
+    assert.ok(cleaned.includes("src/index.ts"));
+    assert.ok(cleaned.includes("console.log('clean code')"));
+    assert.ok(cleaned.includes("[ℹ️ Smart Noise Filter: Omitted 1 generated / lockfile diff section(s)"));
+
+    // formatTabContent integration
+    sp.state.settings = sp.state.settings || {};
+    sp.state.settings.smartNoiseFilter = true;
+    const tabWithLockfiles = {
+      platform: "github",
+      title: "Dependency upgrade PR",
+      files: ["src/index.ts", "package-lock.json", "yarn.lock"],
+      diff: noisyDiff
+    };
+    const formattedWithFilter = sp.formatTabContent(tabWithLockfiles);
+    assert.ok(formattedWithFilter.includes("- src/index.ts"));
+    assert.ok(formattedWithFilter.includes("2 lockfiles/assets omitted by Noise Filter"));
+
+    // Disabled noise filter
+    sp.state.settings.smartNoiseFilter = false;
+    const formattedWithoutFilter = sp.formatTabContent(tabWithLockfiles);
+    assert.ok(formattedWithoutFilter.includes("- package-lock.json"));
+    assert.ok(formattedWithoutFilter.includes("- yarn.lock"));
+  });
+
+  await t.test("11. Token & Context Window Meter: estimateTokens & updateTokenMeter", () => {
+    // Token estimator calculation (~3.8 chars per token)
+    assert.strictEqual(sp.estimateTokens(""), 0);
+    assert.strictEqual(sp.estimateTokens(null), 0);
+    assert.strictEqual(sp.estimateTokens("hello world"), 3);
+    assert.strictEqual(sp.estimateTokens("a".repeat(380)), 100);
+
+    // Context meter badge transitions
+    const badge = sp.elementMap["token-meter-badge"];
+    sp.state.currentModel = "claude-opus-4-6"; // 200,000 max context
+
+    // Normal usage (< 50%)
+    sp.state.messages = [{ role: "user", content: "Short query test" }];
+    sp.elementMap["prompt-input"].value = "";
+    sp.updateTokenMeter();
+    assert.strictEqual(badge.classList.contains("token-warn"), false);
+    assert.strictEqual(badge.classList.contains("token-danger"), false);
+    assert.ok(badge.textContent.includes("tok"));
+
+    // Warning usage (>= 50%, < 80%) -> 110,000 tokens ~ 418,000 chars
+    sp.state.messages = [{ role: "user", content: "a".repeat(420000) }];
+    sp.updateTokenMeter();
+    assert.strictEqual(badge.classList.contains("token-warn"), true);
+    assert.strictEqual(badge.classList.contains("token-danger"), false);
+
+    // Danger usage (>= 80%) -> 170,000 tokens ~ 650,000 chars
+    sp.state.messages = [{ role: "user", content: "a".repeat(650000) }];
+    sp.updateTokenMeter();
+    assert.strictEqual(badge.classList.contains("token-danger"), true);
+  });
+
+  await t.test("12. Custom Actions: load, render, save and delete", async () => {
+    assert.ok(Array.isArray(sp.DEFAULT_CUSTOM_ACTIONS));
+    assert.strictEqual(sp.DEFAULT_CUSTOM_ACTIONS.length, 2);
+
+    // Load defaults when chrome.storage is empty
+    await sp.loadCustomActions();
+    assert.strictEqual(sp.state.customActions.length, 2);
+
+    const container = sp.elementMap["custom-actions-container"];
+    assert.strictEqual(container.children.length, 2);
+
+    // Save a new custom action
+    sp.saveCustomAction("SQL Injection Audit", "💉", "Perform deep AST inspection for unsafe raw SQL queries");
+    assert.strictEqual(sp.state.customActions.length, 3);
+    const addedAction = sp.state.customActions.find(a => a.title === "SQL Injection Audit");
+    assert.ok(addedAction);
+    assert.strictEqual(addedAction.emoji, "💉");
+    assert.strictEqual(container.children.length, 3);
+
+    // Delete custom action
+    sp.deleteCustomAction(addedAction.id);
+    assert.strictEqual(sp.state.customActions.length, 2);
+    assert.strictEqual(container.children.length, 2);
+  });
+
+  await t.test("13. Export & Reporting Suite: Markdown, PR Comment and Jira Format", async () => {
+    // Guard against empty conversation
+    sp.state.messages = [];
+    sp.downloadMarkdownReport();
+    sp.copyAsPRComment();
+    sp.copyAsJiraComment();
+    assert.strictEqual(sp.navigator.clipboard.lastCopied, "");
+
+    // Populate conversation
+    sp.state.currentModel = "claude-opus-4-6";
+    sp.state.pageContext = {
+      title: "PR #42: Security Fixes",
+      url: "https://github.com/org/repo/pull/42",
+      files: ["auth.ts", "token.ts"]
+    };
+    sp.state.messages = [
+      { role: "user", content: "Review this authentication module", timestamp: 1700000000 },
+      { role: "assistant", author: "Claude 4.6 Opus", content: "### Findings\n1. No vulnerabilities detected.\n2. Ensure token expiration is enforced.", timestamp: 1700000005 }
+    ];
+
+    // 1. Download Markdown report
+    sp.downloadMarkdownReport();
+    const toast = sp.elementMap["toast-notification"];
+    assert.ok(toast.textContent.includes("downloaded"));
+
+    // 2. Copy as GitHub/GitLab PR Comment
+    sp.copyAsPRComment();
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("## 🔍 AskDell AI Code Review"));
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("No vulnerabilities detected."));
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("Claude Opus 4.6"));
+
+    // 3. Copy as Jira Issue Comment
+    sp.copyAsJiraComment();
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("h2. AskDell Code Review — PR #42: Security Fixes"));
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("h3. Summary of Findings"));
+    assert.ok(sp.navigator.clipboard.lastCopied.includes("Ensure token expiration is enforced."));
+  });
+
+  await t.test("14. PR Suggestion Generator: formatPrSuggestion formats clean and diff-style code into inline suggestion blocks", () => {
+    // 1. Pure code input
+    const cleanCode = "const timeout = 5000;\nreturn timeout;";
+    const suggestion1 = sp.formatPrSuggestion(cleanCode);
+    assert.strictEqual(suggestion1, "```suggestion\nconst timeout = 5000;\nreturn timeout;\n```");
+
+    // 2. Diff-style additions (stripping leading '+')
+    const diffAdditions = "+ const port = process.env.PORT || 8080;\n+ server.listen(port);";
+    const suggestion2 = sp.formatPrSuggestion(diffAdditions);
+    assert.strictEqual(suggestion2, "```suggestion\nconst port = process.env.PORT || 8080;\nserver.listen(port);\n```");
+
+    // 3. Null / empty safety
+    assert.strictEqual(sp.formatPrSuggestion(""), "```suggestion\n```");
+    assert.strictEqual(sp.formatPrSuggestion(null), "```suggestion\n```");
+    assert.strictEqual(sp.formatPrSuggestion(undefined), "```suggestion\n```");
+
+    // 4. Code block embedding verified in renderMarkdown
+    const rendered = sp.renderMarkdown("```typescript\nconst a = 1;\n```");
+    assert.ok(rendered.includes('class="code-suggestion-btn"'));
+    assert.ok(rendered.includes("💡 Suggestion"));
+  });
+
+  await t.test("15. CI/CD Log Trimmer & Failure Diagnoser: trimCiLogs isolates stack traces and failure signatures", () => {
+    // 1. Short logs are passed through untouched (<= 40 lines)
+    const shortLogs = "Building project...\nCompiled successfully.\nAll 12 tests passed.";
+    assert.strictEqual(sp.trimCiLogs(shortLogs), shortLogs);
+
+    // 2. Long logs with failure patterns are trimmed to isolate error frame
+    const failureLogLines = [];
+    for (let i = 0; i < 60; i++) failureLogLines.push(`[info] setup step ${i}...`);
+    failureLogLines.push("FAIL src/auth/token.spec.ts");
+    failureLogLines.push("AssertionError: expected status 200 to equal 401");
+    failureLogLines.push("    at verifyAuth (src/auth/token.ts:55:12)");
+    failureLogLines.push("    at runTest (src/auth/token.spec.ts:102:18)");
+    for (let i = 0; i < 40; i++) failureLogLines.push(`[debug] teardown task ${i}...`);
+
+    const trimmed = sp.trimCiLogs(failureLogLines.join("\n"));
+    assert.ok(trimmed.includes("[🔍 CI Log Trimmer: Isolated failure sections"));
+    assert.ok(trimmed.includes("FAIL src/auth/token.spec.ts"));
+    assert.ok(trimmed.includes("AssertionError: expected status 200 to equal 401"));
+    assert.ok(!trimmed.includes("[info] setup step 1...")); // non-error noise trimmed
+
+    // 3. Long logs without explicit pattern fallback to head & tail
+    const genericLongLines = Array.from({ length: 80 }, (_, i) => `Log entry line ${i}`);
+    const genericTrimmed = sp.trimCiLogs(genericLongLines.join("\n"));
+    assert.ok(genericTrimmed.includes("[... non-error setup logs truncated ...]"));
+    assert.ok(genericTrimmed.includes("Log entry line 0"));
+    assert.ok(genericTrimmed.includes("Log entry line 79"));
+
+    // 4. Null safety
+    assert.strictEqual(sp.trimCiLogs(""), "");
+    assert.strictEqual(sp.trimCiLogs(null), "");
+  });
+
+  await t.test("16. Command Palette (Ctrl+K): Catalog filtering, model switching, and action execution", () => {
+    // 1. Catalog integrity
+    assert.ok(Array.isArray(sp.COMMAND_CATALOG));
+    assert.ok(sp.COMMAND_CATALOG.length >= 20);
+
+    const fullReviewCmd = sp.COMMAND_CATALOG.find(c => c.id === "action-full-review");
+    assert.ok(fullReviewCmd);
+    assert.strictEqual(fullReviewCmd.category, "Action");
+
+    const modelCmd = sp.COMMAND_CATALOG.find(c => c.id === "model-gemini-flash");
+    assert.ok(modelCmd);
+    assert.strictEqual(modelCmd.category, "Model");
+
+    // 2. Open and Close Palette
+    const palette = sp.elementMap["command-palette"];
+    sp.closeCommandPalette();
+    assert.strictEqual(palette.style.display, "none");
+
+    sp.openCommandPalette();
+    assert.strictEqual(palette.style.display, "flex");
+
+    // 3. Filtering commands
+    sp.renderFilteredCommands("arena");
+    const list = sp.elementMap["cmd-palette-list"];
+    assert.strictEqual(list.children.length, 1);
+    assert.ok(list.children[0].innerHTML.includes("Model Review Arena"));
+
+    // 4. Empty filter state
+    sp.renderFilteredCommands("unknown-command-404");
+    assert.ok(list.innerHTML.includes("No matching commands found"));
+
+    // 5. Execute command item
+    let executed = false;
+    sp.executeCommandPaletteItem({ action: () => { executed = true; } });
+    assert.strictEqual(executed, true);
+    assert.strictEqual(palette.style.display, "none", "Executing command should close palette");
+  });
+
+  await t.test("17. Framework Test Suite Synthesizer: Builds targeted test suite prompts across frameworks and strategies", () => {
+    const panel = sp.elementMap["test-synthesizer-panel"];
+    
+    // 1. Toggle drawer
+    panel.style.display = "none";
+    sp.toggleTestSynthesizerDrawer();
+    assert.strictEqual(panel.style.display, "flex");
+
+    // Ensure all other drawers are closed
+    assert.strictEqual(sp.elementMap["settings-panel"].style.display, "none");
+    assert.strictEqual(sp.elementMap["history-panel"].style.display, "none");
+
+    // 2. Handle Run Test Synthesizer
+    sp.state.demoMode = true;
+    sp.state.connection = { status: "connected" };
+    sp.state.messages = [];
+    sp.elementMap["test-custom-notes"].value = "Mock AuthService and TokenRepository.";
+
+    sp.handleRunTestSynthesizer();
+
+    // Drawer auto-closes
+    assert.strictEqual(panel.style.display, "none");
+
+    // Formulates rich prompt
+    assert.strictEqual(sp.state.messages.length, 1);
+    const promptMsg = sp.state.messages[0].content;
+    assert.ok(promptMsg.includes("Jest / Vitest"));
+    assert.ok(promptMsg.includes("Boundary & Edge Limits"));
+    assert.ok(promptMsg.includes("Mock External APIs & DB"));
+    assert.ok(promptMsg.includes("Mock AuthService and TokenRepository."));
+  });
+
+  await t.test("18. Multi-Model Review Arena: Dual A/B compare rendering, model validation, and responses", async () => {
+    const arenaPanel = sp.elementMap["arena-panel"];
+    
+    // 1. Toggle drawer
+    arenaPanel.style.display = "none";
+    sp.toggleArenaDrawer();
+    assert.strictEqual(arenaPanel.style.display, "flex");
+
+    // 2. Guard: Prevent running identical models
+    sp.elementMap["arena-model-a"].value = "claude-opus-4-6";
+    sp.elementMap["arena-model-b"].value = "claude-opus-4-6";
+    const toast = sp.elementMap["toast-notification"];
+    await sp.handleRunArena();
+    assert.ok(toast.textContent.includes("two different models"));
+
+    // 3. Run with different models in demo mode
+    sp.state.demoMode = true;
+    sp.elementMap["arena-model-a"].value = "claude-opus-4-6";
+    sp.elementMap["arena-model-b"].value = "gemini-3.8-flash";
+    sp.elementMap["arena-prompt-input"].value = "Full PR Review: evaluate architecture, correctness, logic flaws, and optimizations.";
+    sp.state.messages = [];
+
+    await sp.handleRunArena();
+
+    // Arena panel auto-closes
+    assert.strictEqual(arenaPanel.style.display, "none");
+
+    // State messages populated with user prompt + Model A + Model B responses
+    assert.strictEqual(sp.state.messages.length, 3);
+    assert.strictEqual(sp.state.messages[0].role, "user");
+    assert.strictEqual(sp.state.messages[1].role, "assistant");
+    assert.ok(sp.state.messages[1].author.includes("Claude Opus 4.6"));
+    assert.strictEqual(sp.state.messages[2].role, "assistant");
+    assert.ok(sp.state.messages[2].author.includes("Gemini 3.8 Flash"));
+
+    // Messages container has arena wrapper with split container
+    const messagesEl = sp.elementMap["messages"];
+    const arenaWrapper = messagesEl.children.find(c => c.classList.contains("arena-wrapper"));
+    assert.ok(arenaWrapper, "Messages must contain arena-wrapper element");
+  });
 });
+

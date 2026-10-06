@@ -46,6 +46,19 @@
             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
         </button>
+        <button id="btn-export-menu" class="icon-btn" title="Export Review Report (.md / PR Comment)" aria-label="Export Review Report">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+        <button id="btn-arena" class="icon-btn" title="Model Arena (A/B Compare)" aria-label="Model Arena">
+          <span>⚖️</span>
+        </button>
+        <button id="btn-cmd-palette" class="icon-btn cmd-badge-btn" title="Command Palette (Ctrl+K)" aria-label="Command Palette">
+          <span>⌘K</span>
+        </button>
         <button id="btn-new-chat" class="icon-btn" title="New Conversation" aria-label="New Conversation">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -126,6 +139,7 @@
       </div>
       <div class="context-meta">
         <span id="shared-session-badge" class="meta-badge shared-badge" style="display: none;" title="Group Shared Session Active">👥 Shared</span>
+        <span id="token-meter-badge" class="meta-badge token-badge" title="Estimated prompt tokens and context window usage">~0 tok · 0%</span>
         <span id="context-size-badge" class="meta-badge">0 KB</span>
         <button id="btn-refresh-context" class="refresh-context-btn" title="Re-scan active tab">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -137,20 +151,24 @@
       </div>
     </div>
 
-    <!-- Quick Review & Analysis Actions Bar (12 actions) -->
-    <div class="quick-actions">
+    <!-- Quick Review & Analysis Actions Bar (14 actions + custom pinned) -->
+    <div id="quick-actions-bar" class="quick-actions">
       <button class="action-btn" data-action="full-review">🔍 Full PR Review</button>
       <button class="action-btn" data-action="security">🛡️ Security Audit</button>
       <button class="action-btn" data-action="performance">⚡ Performance</button>
       <button class="action-btn" data-action="clean-code">🧹 Clean Code</button>
+      <button class="action-btn" data-action="ci-diagnose">🚨 CI/CD Failure</button>
       <button class="action-btn" data-action="summarize">📝 Summarize</button>
       <button class="action-btn" data-action="explain">💡 Explain</button>
       <button class="action-btn" data-action="debug">🐛 Debug Issues</button>
       <button class="action-btn" data-action="test-cases">🧪 Test Cases</button>
+      <button id="btn-open-test-builder" class="action-btn" title="Framework-Specific Test Builder">🧪 Test Builder</button>
       <button class="action-btn" data-action="document">📖 Generate Docs</button>
       <button class="action-btn" data-action="refactor">♻️ Refactor</button>
       <button class="action-btn" data-action="architecture">🏗️ Architecture</button>
       <button class="action-btn" data-action="api-review">🔗 API Review</button>
+      <span id="custom-actions-container"></span>
+      <button id="btn-add-custom-action" class="action-btn btn-add-chip" title="Create or Manage Custom Review Actions">+ Custom</button>
     </div>
 
     <!-- History Drawer (Slide-down / Overlay) -->
@@ -201,6 +219,10 @@
         <label class="setting-row checkbox-row">
           <span>Auto-include page context / PR diff</span>
           <input type="checkbox" id="setting-include-page" checked>
+        </label>
+        <label class="setting-row checkbox-row" title="Automatically omit package-lock.json, minified bundles, and asset diffs to save context tokens">
+          <span>Smart Noise Filter (Exclude lockfiles & assets)</span>
+          <input type="checkbox" id="setting-noise-filter" checked>
         </label>
         <label class="setting-row checkbox-row">
           <span>Auto Web Search (for lookups / Gemini)</span>
@@ -294,6 +316,225 @@
           <div class="settings-note">
             Your name tags your messages in the shared thread so team members know who asked each question.
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export & Report Drawer (Slide-down / Overlay) -->
+    <div id="export-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <div class="share-header-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <h3>Export & Review Reports</h3>
+        </div>
+        <button id="btn-close-export" class="icon-close-btn" aria-label="Close Export">✕</button>
+      </div>
+
+      <div class="share-content">
+        <!-- 1. Download Markdown Report -->
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">📄 Full Markdown Report (.md)</span>
+            <span class="share-pill active">File</span>
+          </div>
+          <p class="share-card-desc">Download a structured Markdown report with timestamp, PR/page metadata, model info, token stats, and all conversation turns.</p>
+          <div class="share-btn-row">
+            <button id="btn-download-md" class="btn-action-primary" style="width: 100%;">
+              <span>⬇️ Download Markdown Report (.md)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Copy as GitHub / GitLab PR Comment -->
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">💬 GitHub / GitLab PR Comment</span>
+            <span class="share-pill">Clipboard</span>
+          </div>
+          <p class="share-card-desc">Formats the latest AI review into collapsible sections and suggestion blocks ready to paste directly into a PR review comment.</p>
+          <div class="share-btn-row">
+            <button id="btn-copy-pr-comment" class="btn-outline">
+              <span>📋 Copy as PR Comment</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Copy as Jira / Confluence Issue -->
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">🎫 Jira Issue / Bug Ticket Format</span>
+            <span class="share-pill">Clipboard</span>
+          </div>
+          <p class="share-card-desc">Extracts key security findings, bugs, and test recommendations formatted cleanly for Jira ticket descriptions or team issue trackers.</p>
+          <div class="share-btn-row">
+            <button id="btn-copy-jira-comment" class="btn-outline">
+              <span>📋 Copy Jira Description</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Action & Prompt Manager Drawer (Slide-down / Overlay) -->
+    <div id="custom-action-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <div class="share-header-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <h3>Custom Review Prompts & Actions</h3>
+        </div>
+        <button id="btn-close-custom-actions" class="icon-close-btn" aria-label="Close Custom Actions">✕</button>
+      </div>
+
+      <div class="share-content">
+        <!-- New Custom Action Form -->
+        <div class="share-card">
+          <span class="share-card-title">✨ Create New Action Chip</span>
+          <p class="share-card-desc">Pin custom prompt shortcuts to your quick action bar (e.g. Dell SDL security, Terraform linters, Go benchmarks).</p>
+          
+          <div class="custom-action-form">
+            <div class="form-row-compact">
+              <input type="text" id="custom-action-emoji" placeholder="Emoji" value="⚡" maxlength="4" style="width: 50px; text-align: center;">
+              <input type="text" id="custom-action-title" placeholder="Action Name (e.g. Terraform Audit)" maxlength="24" style="flex: 1;">
+            </div>
+            <textarea id="custom-action-prompt" placeholder="Enter prompt instructions for this action. The active page context & diff will be automatically analyzed..." rows="3"></textarea>
+            <button id="btn-save-custom-action" class="btn-action-primary" style="width: 100%;">
+              <span>💾 Save & Pin Action Chip</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Saved Actions List -->
+        <div class="share-card">
+          <div class="share-card-header">
+            <span class="share-card-title">📌 Pinned Custom Actions</span>
+            <span id="custom-actions-count" class="share-pill">0 Custom</span>
+          </div>
+          <div id="custom-actions-list" class="custom-actions-list">
+            <div class="empty-custom-actions">No custom actions yet. Create one above to pin it to your review bar!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Command Palette (Spotlight Modal) -->
+    <div id="command-palette" class="cmd-palette-backdrop" style="display: none;">
+      <div class="cmd-palette-dialog" role="dialog" aria-modal="true" aria-label="Command Palette">
+        <div class="cmd-palette-input-box">
+          <span class="cmd-search-icon">🔍</span>
+          <input type="text" id="cmd-palette-input" placeholder="Type a command, model, or action... (Esc to close)" autocomplete="off" spellcheck="false">
+          <button id="btn-close-cmd-palette" class="cmd-esc-badge" aria-label="Close Command Palette">ESC</button>
+        </div>
+        <div id="cmd-palette-list" class="cmd-palette-list">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="cmd-palette-footer">
+          <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
+          <span><kbd>↵</kbd> Select</span>
+          <span><kbd>Esc</kbd> Dismiss</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Framework Test Suite Synthesizer Drawer -->
+    <div id="test-synthesizer-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <div class="share-header-title">
+          <span>🧪</span>
+          <h3>Framework Test Suite Synthesizer</h3>
+        </div>
+        <button id="btn-close-test-synthesizer" class="icon-close-btn" aria-label="Close Test Synthesizer">✕</button>
+      </div>
+
+      <div class="share-content">
+        <div class="share-card">
+          <span class="share-card-title">1. Target Test Framework</span>
+          <div class="test-framework-grid">
+            <label class="framework-radio"><input type="radio" name="test-framework" value="Jest / Vitest" checked> <span>⚡ Jest / Vitest (TS/JS)</span></label>
+            <label class="framework-radio"><input type="radio" name="test-framework" value="PyTest"> <span>🐍 PyTest (Python)</span></label>
+            <label class="framework-radio"><input type="radio" name="test-framework" value="JUnit 5 & Mockito"> <span>☕ JUnit 5 & Mockito (Java)</span></label>
+            <label class="framework-radio"><input type="radio" name="test-framework" value="Go testing"> <span>🐹 Go test (Golang)</span></label>
+            <label class="framework-radio"><input type="radio" name="test-framework" value="xUnit / NUnit"> <span>🔷 xUnit / NUnit (.NET)</span></label>
+            <label class="framework-radio"><input type="radio" name="test-framework" value="Rust cargo test"> <span>🦀 Rust (cargo test)</span></label>
+          </div>
+        </div>
+
+        <div class="share-card">
+          <span class="share-card-title">2. Coverage Strategy</span>
+          <div class="strategy-checkbox-grid">
+            <label class="strategy-check"><input type="checkbox" id="test-strat-boundary" checked> <span>Boundary & Edge Cases</span></label>
+            <label class="strategy-check"><input type="checkbox" id="test-strat-mocks" checked> <span>Mock External APIs & DB</span></label>
+            <label class="strategy-check"><input type="checkbox" id="test-strat-table" checked> <span>Table-Driven / Parameterized</span></label>
+            <label class="strategy-check"><input type="checkbox" id="test-strat-errors" checked> <span>Error & Exception Paths</span></label>
+          </div>
+        </div>
+
+        <div class="share-card">
+          <span class="share-card-title">3. Custom Mock / Fixture Notes (Optional)</span>
+          <textarea id="test-custom-notes" placeholder="e.g. Mock DatabasePool, use factory pattern for entities, assert HTTP status codes..." rows="2"></textarea>
+          <button id="btn-run-test-synthesizer" class="btn-action-primary" style="width: 100%; margin-top: 8px;">
+            <span>⚡ Generate Runnable Test Suite</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Multi-Model Review Arena Drawer (A/B Compare) -->
+    <div id="arena-panel" class="overlay-panel" style="display: none;">
+      <div class="overlay-header">
+        <div class="share-header-title">
+          <span>⚖️</span>
+          <h3>Multi-Model Review Arena (A/B Compare)</h3>
+        </div>
+        <button id="btn-close-arena" class="icon-close-btn" aria-label="Close Arena">✕</button>
+      </div>
+
+      <div class="share-content">
+        <div class="share-card">
+          <span class="share-card-title">Select Competing Frontier Models</span>
+          <p class="share-card-desc">Execute dual analysis in parallel to compare architectural reasoning, depth, and review accuracy.</p>
+          <div class="arena-model-selectors">
+            <div class="arena-col-select">
+              <label for="arena-model-a">Model A</label>
+              <select id="arena-model-a">
+                <option value="claude-opus-4-6" selected>Claude Opus 4.6 (Anthropic)</option>
+                <option value="claude-sonnet-5">Claude Sonnet 5 (Anthropic)</option>
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash (GCP)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (GCP)</option>
+                <option value="llama-3.3-70b-instruct">Llama-3.3 70B (Meta)</option>
+              </select>
+            </div>
+            <div class="arena-vs-badge">VS</div>
+            <div class="arena-col-select">
+              <label for="arena-model-b">Model B</label>
+              <select id="arena-model-b">
+                <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (GCP)</option>
+                <option value="claude-opus-4-6">Claude Opus 4.6 (Anthropic)</option>
+                <option value="claude-sonnet-5">Claude Sonnet 5 (Anthropic)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (GCP)</option>
+                <option value="llama-3.3-70b-instruct">Llama-3.3 70B (Meta)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="share-card">
+          <span class="share-card-title">Arena Review Task</span>
+          <div class="arena-quick-prompts">
+            <button class="sample-chip arena-prompt-chip" data-prompt="Full PR Review: evaluate architecture, correctness, logic flaws, and optimizations.">Full PR Review</button>
+            <button class="sample-chip arena-prompt-chip" data-prompt="Security Audit: detect injection vectors, authorization flaws, and secrets.">Security Audit</button>
+            <button class="sample-chip arena-prompt-chip" data-prompt="Performance Review: examine algorithmic complexity, memory allocations, and query bottlenecks.">Performance</button>
+          </div>
+          <textarea id="arena-prompt-input" placeholder="Enter review prompt for both models..." rows="3">Full PR Review: evaluate architecture, correctness, logic flaws, and optimizations.</textarea>
+          <button id="btn-run-arena" class="btn-action-primary" style="width: 100%; margin-top: 8px;">
+            <span>⚖️ Run Dual A/B Review Comparison</span>
+          </button>
         </div>
       </div>
     </div>

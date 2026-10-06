@@ -19,10 +19,12 @@ let state = {
   pageContext: null,
   availableModels: [],
   historyCache: [],
+  customActions: [],
   connection: { status: "checking" },
   settings: {
     model: "claude-opus-4-6",
     includePageContent: true,
+    smartNoiseFilter: true,
     autoWebSearch: true,
     maxContentLength: 100000,
     connectionMode: "enterprise"
@@ -111,6 +113,138 @@ const MODEL_META = {
   }
 };
 
+// Model Context Windows (Tokens)
+const MODEL_CONTEXT_WINDOWS = {
+  "claude-opus-4-6": 200000,
+  "claude-sonnet-5": 200000,
+  "claude-opus": 200000,
+  "claude-sonnet": 200000,
+  "gemini-3-8-flash": 1000000,
+  "gemini-3.1-pro-preview": 1000000,
+  "gemini-flash": 1000000,
+  "gemini-pro": 1000000,
+  "llama-3.3-70b-instruct": 128000,
+  "gemma-3-27b-it": 128000,
+  "gpt-oss-120b": 128000,
+  "gpt-oss-20b": 64000,
+  "pixtral-12b-vision": 128000
+};
+
+// Default Custom Action Templates
+const DEFAULT_CUSTOM_ACTIONS = [
+  {
+    id: "custom-sdl-security",
+    title: "Dell SDL Security",
+    emoji: "🛡️",
+    prompt: "Conduct a comprehensive Dell Secure Development Lifecycle (SDL) audit: check for hardcoded API keys, private corporate tokens, unencrypted communication, TLS verification bypass, and vulnerable open-source dependencies."
+  },
+  {
+    id: "custom-k8s-manifest",
+    title: "K8s & Cloud Audit",
+    emoji: "☸️",
+    prompt: "Audit this Kubernetes / Helm / Docker configuration for security and resilience: check resource limits, read-only root filesystems, non-root user enforcement, health probes, and secret mounting."
+  }
+];
+
+// Smart Noise Filter Patterns for Code Review
+const NOISY_FILE_EXTENSIONS = [
+  "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "composer.lock",
+  "gemfile.lock", "cargo.lock", "go.sum", "poetry.lock", "pipfile.lock",
+  ".min.js", ".min.css", ".bundle.js", ".chunk.js", ".map"
+];
+
+function isNoisyFile(filePath) {
+  if (!filePath || typeof filePath !== "string") return false;
+  const lower = filePath.toLowerCase().trim();
+  return NOISY_FILE_EXTENSIONS.some(noise => lower.endsWith(noise) || lower.includes("/" + noise));
+}
+
+function sanitizeDiffNoise(diffText) {
+  if (!diffText || typeof diffText !== "string") return "";
+  const splitPattern = diffText.includes("diff --git")
+    ? /(?=(?:^|\n)diff --git )/
+    : /(?=(?:^|\n)(?:Index: |=== |--- [ab]\/))/;
+  const blocks = diffText.split(splitPattern);
+  if (blocks.length <= 1) return diffText;
+
+  let omittedCount = 0;
+  const cleaned = [];
+  for (const block of blocks) {
+    let isBlockNoisy = false;
+    for (const noise of NOISY_FILE_EXTENSIONS) {
+      if (block.toLowerCase().includes(noise)) {
+        isBlockNoisy = true;
+        omittedCount++;
+        break;
+      }
+    }
+    if (!isBlockNoisy) {
+      cleaned.push(block);
+    }
+  }
+
+  if (omittedCount > 0) {
+    cleaned.push(`\n[ℹ️ Smart Noise Filter: Omitted ${omittedCount} generated / lockfile diff section(s) to optimize context tokens]`);
+  }
+  return cleaned.join("");
+}
+
+function formatPrSuggestion(rawCode) {
+  if (!rawCode || typeof rawCode !== "string") return "```suggestion\n```";
+  let clean = rawCode;
+  if (clean.includes("\n+") || clean.startsWith("+")) {
+    const lines = clean.split(/\r?\n/)
+      .filter(l => l.startsWith("+") && !l.startsWith("+++"))
+      .map(l => (l.startsWith("+ ") ? l.slice(2) : l.slice(1)));
+    if (lines.length > 0) clean = lines.join("\n");
+  }
+  return `\`\`\`suggestion\n${clean.trim()}\n\`\`\``;
+}
+
+function trimCiLogs(rawLogs) {
+  if (!rawLogs || typeof rawLogs !== "string") return "";
+  const lines = rawLogs.split(/\r?\n/);
+  if (lines.length <= 40) return rawLogs;
+
+  const failurePattern = /(?:npm ERR!|FAILED:|AssertionError|panic:|FATAL:|BUILD FAILURE|FAILURE:|Exit status:|Traceback \(most recent call last\):|Exception in thread|SyntaxError:|ReferenceError:|TypeError:|NullPointerException|FAIL [a-zA-Z0-9_/.-]+|❌|=== RUN|Error:|ERROR:|FAILED TESTS)/i;
+
+  const matchedIndices = new Set();
+  lines.forEach((line, idx) => {
+    if (failurePattern.test(line)) {
+      const start = Math.max(0, idx - 3);
+      const end = Math.min(lines.length - 1, idx + 8);
+      for (let i = start; i <= end; i++) {
+        matchedIndices.add(i);
+      }
+    }
+  });
+
+  if (matchedIndices.size === 0) {
+    const head = lines.slice(0, 15).join("\n");
+    const tail = lines.slice(-40).join("\n");
+    return `${head}\n\n[... non-error setup logs truncated ...]\n\n${tail}`;
+  }
+
+  const sortedIndices = Array.from(matchedIndices).sort((a, b) => a - b);
+  const resultLines = [];
+  let lastIdx = -1;
+
+  sortedIndices.forEach((idx) => {
+    if (lastIdx !== -1 && idx > lastIdx + 1) {
+      resultLines.push("... [intermediate output trimmed] ...");
+    }
+    resultLines.push(lines[idx]);
+    lastIdx = idx;
+  });
+
+  return `[🔍 CI Log Trimmer: Isolated failure sections from ${lines.length} lines]\n` + resultLines.join("\n");
+}
+
+function estimateTokens(text) {
+  if (!text || typeof text !== "string") return 0;
+  return Math.max(1, Math.ceil(text.length / 3.8));
+}
+
 function getModelMetadata(modelId, modelName = "") {
   if (MODEL_META[modelId]) return MODEL_META[modelId];
 
@@ -158,8 +292,11 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 document.addEventListener("DOMContentLoaded", async () => {
   initTheme();
   await loadSettings();
+  await loadCustomActions();
   setupEventListeners();
   setupMessageListeners();
+  initCommandPalette();
+  updateTokenMeter();
   
   // Detect active tab context immediately
   await scanActiveTabContext();
@@ -172,6 +309,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Check if opened via context menu action
   await checkPendingAction();
+
+  // Check if opened with a shared link in query param or hash
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinParam = urlParams.get("join") || urlParams.get("share");
+    const hash = window.location.hash;
+    if (joinParam) {
+      await handleJoinSession(joinParam);
+    } else if (hash && hash.includes("session=")) {
+      await handleJoinSession(hash);
+    }
+  } catch (err) {
+    // Ignore URL parse errors
+  }
 });
 
 // ============================================================
@@ -251,6 +402,10 @@ async function loadSettings() {
       const maxLenEl = $("#setting-max-length");
       if (maxLenEl) maxLenEl.value = state.settings.maxContentLength;
 
+      state.settings.smartNoiseFilter = res.settings?.smartNoiseFilter ?? true;
+      const noiseEl = $("#setting-noise-filter");
+      if (noiseEl) noiseEl.checked = state.settings.smartNoiseFilter;
+
       const quickIncludeEl = $("#include-page-content");
       if (quickIncludeEl) quickIncludeEl.checked = state.settings.includePageContent;
 
@@ -267,6 +422,7 @@ function saveSettings() {
   state.settings.model = $("#setting-default-model")?.value || state.currentModel;
   state.settings.autoWebSearch = $("#setting-web-search")?.checked ?? true;
   state.settings.includePageContent = $("#setting-include-page")?.checked ?? true;
+  state.settings.smartNoiseFilter = $("#setting-noise-filter")?.checked ?? true;
   state.settings.maxContentLength = parseInt($("#setting-max-length")?.value, 10) || 100000;
   state.settings.connectionMode = $("#setting-connection-mode")?.value || (state.demoMode ? "demo" : "enterprise");
   state.demoMode = state.settings.connectionMode === "demo";
@@ -614,6 +770,7 @@ function updateContextBarUI(content) {
   const totalLength = (content.diff?.length || 0) + (content.code?.length || 0) + (content.body?.length || 0) + (content.comments?.length || 0);
   const kb = (totalLength / 1024).toFixed(1);
   sizeBadge.textContent = `${kb} KB`;
+  updateTokenMeter();
 }
 
 // ============================================================
@@ -624,6 +781,7 @@ function setupEventListeners() {
   $("#model-selector")?.addEventListener("change", (e) => {
     state.currentModel = e.target.value;
     updateModelUI();
+    updateTokenMeter();
   });
 
   // Send message
@@ -634,6 +792,7 @@ function setupEventListeners() {
     const includeContext = $("#include-page-content").checked;
     input.value = "";
     updateCharCounter();
+    updateTokenMeter();
     handleUserSubmission(text, includeContext);
   });
 
@@ -645,12 +804,13 @@ function setupEventListeners() {
     }
   });
 
-  // Auto-expand textarea & character counter
+  // Auto-expand textarea & character counter & token meter
   $("#prompt-input").addEventListener("input", () => {
     const input = $("#prompt-input");
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 160) + "px";
     updateCharCounter();
+    updateTokenMeter();
   });
 
   // Banner Actions
@@ -742,10 +902,9 @@ function setupEventListeners() {
   // Settings Drawer toggle
   $("#btn-settings").addEventListener("click", () => {
     const panel = $("#settings-panel");
-    $("#history-panel").style.display = "none";
-    const sharePanel = $("#share-panel");
-    if (sharePanel) sharePanel.style.display = "none";
-    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+    const isHidden = panel.style.display === "none";
+    closeAllDrawers();
+    panel.style.display = isHidden ? "flex" : "none";
   });
 
   $("#btn-close-settings").addEventListener("click", () => {
@@ -759,6 +918,64 @@ function setupEventListeners() {
     $("#share-panel").style.display = "none";
   });
   $("#shared-session-badge")?.addEventListener("click", toggleSharePanel);
+
+  // Export & Report Drawer toggle
+  $("#btn-export-menu")?.addEventListener("click", toggleExportDrawer);
+  $("#btn-close-export")?.addEventListener("click", () => {
+    $("#export-panel").style.display = "none";
+  });
+  $("#btn-download-md")?.addEventListener("click", downloadMarkdownReport);
+  $("#btn-copy-pr-comment")?.addEventListener("click", copyAsPRComment);
+  $("#btn-copy-jira-comment")?.addEventListener("click", copyAsJiraComment);
+
+  // Custom Actions Drawer toggle & management
+  $("#btn-add-custom-action")?.addEventListener("click", toggleCustomActionsDrawer);
+  $("#btn-close-custom-actions")?.addEventListener("click", () => {
+    $("#custom-action-panel").style.display = "none";
+  });
+  $("#btn-save-custom-action")?.addEventListener("click", () => {
+    const title = $("#custom-action-title")?.value?.trim();
+    const emoji = $("#custom-action-emoji")?.value?.trim() || "⚡";
+    const prompt = $("#custom-action-prompt")?.value?.trim();
+    if (title && prompt) {
+      saveCustomAction(title, emoji, prompt);
+      if ($("#custom-action-title")) $("#custom-action-title").value = "";
+      if ($("#custom-action-prompt")) $("#custom-action-prompt").value = "";
+    } else {
+      showNotification("Please provide both an Action Name and Prompt.", "warning");
+    }
+  });
+
+  // Model Arena Drawer
+  $("#btn-arena")?.addEventListener("click", toggleArenaDrawer);
+  $("#btn-close-arena")?.addEventListener("click", () => {
+    $("#arena-panel").style.display = "none";
+  });
+  $("#btn-run-arena")?.addEventListener("click", handleRunArena);
+  $$(".arena-prompt-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const p = chip.dataset.prompt;
+      const inp = $("#arena-prompt-input");
+      if (inp && p) inp.value = p;
+    });
+  });
+
+  // Framework Test Synthesizer
+  $("#btn-open-test-builder")?.addEventListener("click", toggleTestSynthesizerDrawer);
+  $("#btn-close-test-synthesizer")?.addEventListener("click", () => {
+    $("#test-synthesizer-panel").style.display = "none";
+  });
+  $("#btn-run-test-synthesizer")?.addEventListener("click", handleRunTestSynthesizer);
+
+  // Command Palette
+  $("#btn-cmd-palette")?.addEventListener("click", toggleCommandPalette);
+
+  // Token meter click for stats breakdown
+  $("#token-meter-badge")?.addEventListener("click", () => {
+    const modelName = MODEL_META[state.currentModel]?.name || state.currentModel;
+    const maxTokens = MODEL_CONTEXT_WINDOWS[state.currentModel] || 128000;
+    showNotification(`⚡ Model Window: ${modelName} (${maxTokens.toLocaleString()} tokens capacity)`, "info");
+  });
 
   $("#btn-generate-share")?.addEventListener("click", handleGenerateShareLink);
   $("#btn-copy-share-link")?.addEventListener("click", copyShareLink);
@@ -890,6 +1107,7 @@ function executeQuickAction(actionType) {
     "security": "Perform a rigorous security vulnerability audit. Check for OWASP Top 10 flaws, injection risks (SQL, command, LDAP), XSS, CSRF, auth/authz bypasses, sensitive data exposure, SSRF, and insecure deserialization.",
     "performance": "Analyze this code for performance bottlenecks: algorithmic complexity (Big-O), redundant memory allocations, N+1 queries, unindexed DB accesses, thread safety, and resource leaks.",
     "clean-code": "Review this code for clean code practices, SOLID design principles, DRY adherence, naming readability, cyclomatic complexity, and recommend concise refactorings.",
+    "ci-diagnose": "Analyze these CI/CD pipeline and build failure logs in detail. Pinpoint the failing stack trace, file, and line number. Explain the exact root cause, and provide a code patch fix with verification commands.",
     "summarize": "Provide a high-level technical executive summary of this content: 1) What changes or features are implemented, 2) Why they were implemented, 3) Key components affected, and 4) Potential deployment risks.",
     "explain": "Explain this code and architecture thoroughly as if onboarding a developer to the team. Explain data flow, design patterns, and non-obvious implementation details.",
     "debug": "Analyze this code for subtle bugs, race conditions, null pointer risks, off-by-one errors, and unhandled exceptions. For each bug, describe the issue, show the fix, and rate severity.",
@@ -1209,6 +1427,53 @@ function processOrderRequest(order, customer) {
 
   return executeFulfillment(order, customer);
 }
+\`\`\``;
+  }
+
+  // CI/CD Failure Diagnoser
+  if (pLower.includes("ci-diagnose") || pLower.includes("ci failure") || pLower.includes("pipeline failure") || pLower.includes("stack trace") || pLower.includes("build failure")) {
+    return `<think>
+1. Scanning CI pipeline execution logs for build failure and non-zero exit status.
+2. Isolating active stack trace frame and failing test assertion.
+3. Formulating root cause explanation and pinpointed code diff patch with suggestion syntax.
+</think>
+
+### 🚨 CI/CD Build & Pipeline Failure Root Cause Analysis
+
+**Target**: \`${title}\`  
+**Platform**: ${platform}  
+**Classification**: \`Pipeline Job Failure (Exit Code 1)\`
+
+---
+
+#### 1. Isolated Stack Trace Frame
+\`\`\`text
+FAIL src/services/auth.spec.ts > AuthenticationMiddleware > should verify JWT token
+AssertionError: expected 'UNAUTHORIZED' to equal 'TOKEN_EXPIRED'
+    at verifyToken (src/services/auth.ts:42:15)
+    at runTest (src/services/auth.spec.ts:88:22)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+\`\`\`
+
+#### 2. Root Cause Analysis
+- **Defect Location**: \`src/services/auth.ts:42\`
+- **Mechanism**: The authentication handler caught an expired token but unconditionally mapped it to a generic \`UNAUTHORIZED\` error code rather than checking for \`TOKEN_EXPIRED\`.
+- **Pipeline Impact**: Unit test assertion failed on contract match; blocked \`Test & Lint\` stage.
+
+#### 3. Targeted Code Fix
+\`\`\`diff
+- if (!decoded) throw new AuthError("UNAUTHORIZED");
++ if (decoded.isExpired) {
++   throw new AuthError("TOKEN_EXPIRED", "Session expired, please refresh token");
++ }
++ if (!decoded.isValid) {
++   throw new AuthError("UNAUTHORIZED", "Invalid token signature");
++ }
+\`\`\`
+
+#### 4. Verification Command
+\`\`\`bash
+npm test -- src/services/auth.spec.ts --run
 \`\`\``;
   }
 
@@ -1671,9 +1936,12 @@ function stopActiveStream() {
 
 function updateUIStreamingState(streaming) {
   state.isStreaming = streaming;
-  $("#btn-send").disabled = streaming;
-  $("#btn-stop").style.display = streaming ? "flex" : "none";
-  $("#streaming-controls").style.display = streaming ? "flex" : "none";
+  const btnSend = $("#btn-send");
+  if (btnSend) btnSend.disabled = streaming;
+  const btnStop = $("#btn-stop");
+  if (btnStop) btnStop.style.display = streaming ? "flex" : "none";
+  const streamControls = $("#streaming-controls");
+  if (streamControls) streamControls.style.display = streaming ? "flex" : "none";
   
   const meta = MODEL_META[state.currentModel] || { name: state.currentModel };
   if (streaming) {
@@ -2070,13 +2338,18 @@ function formatCodeBlock(lang, code) {
     <div class="code-block-container">
       <div class="code-header">
         <span>${languageLabel}</span>
-        <button class="code-copy-btn" data-raw="${encodeURIComponent(code)}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-          <span>Copy code</span>
-        </button>
+        <div class="code-header-actions">
+          <button class="code-suggestion-btn" data-raw="${encodeURIComponent(code)}" title="Copy as GitHub / GitLab PR Suggestion">
+            <span>💡 Suggestion</span>
+          </button>
+          <button class="code-copy-btn" data-raw="${encodeURIComponent(code)}" title="Copy code">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy code</span>
+          </button>
+        </div>
       </div>
       <pre><code>${formattedInner}</code></pre>
     </div>
@@ -2113,14 +2386,28 @@ function renderMarkdownTables(text) {
 }
 
 function attachCodeBlockCopyButtons(container) {
+  if (!container || !container.querySelectorAll) return;
   container.querySelectorAll(".code-copy-btn").forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
       const raw = decodeURIComponent(btn.dataset.raw || "");
       navigator.clipboard.writeText(raw);
       const span = btn.querySelector("span");
-      span.textContent = "Copied!";
-      setTimeout(() => { span.textContent = "Copy code"; }, 1800);
+      if (span) span.textContent = "Copied!";
+      setTimeout(() => { if (span) span.textContent = "Copy code"; }, 1800);
+    };
+  });
+
+  container.querySelectorAll(".code-suggestion-btn").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const raw = decodeURIComponent(btn.dataset.raw || "");
+      const suggestion = formatPrSuggestion(raw);
+      navigator.clipboard.writeText(suggestion);
+      const span = btn.querySelector("span");
+      if (span) span.textContent = "Copied Suggestion!";
+      showNotification("📋 Copied as GitHub / GitLab PR Suggestion!", "info");
+      setTimeout(() => { if (span) span.textContent = "💡 Suggestion"; }, 2000);
     };
   });
 }
@@ -2128,20 +2415,47 @@ function attachCodeBlockCopyButtons(container) {
 function formatTabContent(content) {
   if (!content) return "";
   const maxLen = state.settings?.maxContentLength || 100000;
-  if (typeof content === "string") return content.substring(0, maxLen);
+  const useNoiseFilter = state.settings?.smartNoiseFilter ?? true;
+
+  if (typeof content === "string") {
+    const text = useNoiseFilter ? sanitizeDiffNoise(content) : content;
+    return text.substring(0, maxLen);
+  }
+
   const parts = [];
   if (content.platform) parts.push(`Platform: ${content.platform}`);
   if (content.type) parts.push(`Content Type: ${content.type}`);
   if (content.title) parts.push(`Title: ${content.title}`);
   if (content.url) parts.push(`URL: ${content.url}`);
-  if (content.files?.length) parts.push(`Files (${content.files.length}):\n${content.files.map(f => `- ${f}`).join("\n")}`);
+
+  if (content.files?.length) {
+    const files = content.files;
+    if (useNoiseFilter) {
+      const meaningfulFiles = files.filter(f => !isNoisyFile(f));
+      const omitted = files.length - meaningfulFiles.length;
+      if (omitted > 0) {
+        parts.push(`Files (${meaningfulFiles.length} reviewed, ${omitted} lockfiles/assets omitted by Noise Filter):\n${meaningfulFiles.map(f => `- ${f}`).join("\n")}`);
+      } else {
+        parts.push(`Files (${files.length}):\n${files.map(f => `- ${f}`).join("\n")}`);
+      }
+    } else {
+      parts.push(`Files (${files.length}):\n${files.map(f => `- ${f}`).join("\n")}`);
+    }
+  }
+
   if (content.body) parts.push(`\nDescription / Body:\n${content.body}`);
-  if (content.diff) parts.push(`\nDiff / Changes:\n\`\`\`diff\n${content.diff}\n\`\`\``);
-  if (content.code) parts.push(`\nSource Code:\n\`\`\`\n${content.code}\n\`\`\``);
+  if (content.diff) {
+    const diffText = useNoiseFilter ? sanitizeDiffNoise(content.diff) : content.diff;
+    parts.push(`\nDiff / Changes:\n\`\`\`diff\n${diffText}\n\`\`\``);
+  }
+  if (content.code) {
+    const codeText = useNoiseFilter && isNoisyFile(content.title || content.url) ? "[File omitted by Smart Noise Filter]" : content.code;
+    parts.push(`\nSource Code:\n\`\`\`\n${codeText}\n\`\`\``);
+  }
   if (content.comments) parts.push(`\nDiscussion / Comments:\n${content.comments}`);
-  if (content.logs) parts.push(`\nLogs:\n\`\`\`\n${content.logs}\n\`\`\``);
+  if (content.logs) parts.push(`\nLogs:\n\`\`\`\n${trimCiLogs(content.logs)}\n\`\`\``);
   if (content.tables) parts.push(`\nTables:\n${content.tables}`);
-  return parts.join("\n\n").substring(0, state.settings.maxContentLength);
+  return parts.join("\n\n").substring(0, maxLen);
 }
 
 // ============================================================
@@ -2149,15 +2463,12 @@ function formatTabContent(content) {
 // ============================================================
 async function toggleHistoryDrawer() {
   const panel = $("#history-panel");
-  $("#settings-panel").style.display = "none";
-  const sharePanel = $("#share-panel");
-  if (sharePanel) sharePanel.style.display = "none";
-
   if (panel.style.display !== "none") {
     panel.style.display = "none";
     return;
   }
 
+  closeAllDrawers();
   panel.style.display = "flex";
   const list = $("#history-list");
 
@@ -2264,7 +2575,13 @@ async function loadChatFromHistory(chatId) {
         finalizeStreamingCard(card, msg.content);
       }
     });
-    $("#history-panel").style.display = "none";
+
+    const welcomeCard = $("#welcome-card");
+    if (welcomeCard) welcomeCard.remove();
+
+    closeAllDrawers();
+    scrollMessagesToBottom();
+    updateTokenMeter();
     return;
   }
 
@@ -2311,7 +2628,12 @@ async function loadChatFromHistory(chatId) {
         }
       });
 
-      $("#history-panel").style.display = "none";
+      const welcomeCard = $("#welcome-card");
+      if (welcomeCard) welcomeCard.remove();
+
+      closeAllDrawers();
+      scrollMessagesToBottom();
+      updateTokenMeter();
     }
   } catch (err) {
     showNotification(`Could not load chat: ${err.message}`, "error");
@@ -2427,14 +2749,12 @@ const DEMO_SHARED_SESSIONS = {
 
 function toggleSharePanel() {
   const panel = $("#share-panel");
-  $("#history-panel").style.display = "none";
-  $("#settings-panel").style.display = "none";
-
   if (panel.style.display !== "none") {
     panel.style.display = "none";
     return;
   }
 
+  closeAllDrawers();
   panel.style.display = "flex";
   clearShareFeedback();
   setJoinButtonLoading(false);
@@ -2755,9 +3075,10 @@ async function handleJoinSession(rawInput) {
     if (cached) {
       await loadChatFromHistory(cached.id);
       state.shareId = code;
-      state.isShared = true;
       updateSharedContextBadge(code);
-      $("#share-panel").style.display = "none";
+      closeAllDrawers();
+      scrollMessagesToBottom();
+      updateTokenMeter();
       setJoinButtonLoading(false);
       showNotification(`👥 Joined shared session [${code}]! Context loaded.`, "info");
       return;
@@ -2875,10 +3196,15 @@ async function handleJoinSession(rawInput) {
         }
       });
 
+      const welcomeCard = $("#welcome-card");
+      if (welcomeCard) welcomeCard.remove();
+
       updateSharedContextBadge(code);
       clearShareFeedback();
       setJoinButtonLoading(false);
-      $("#share-panel").style.display = "none";
+      closeAllDrawers();
+      scrollMessagesToBottom();
+      updateTokenMeter();
       showNotification(`👥 Joined shared session [${code}]! Context synchronized.`, "info");
     } else {
       throw new Error(resp?.error || "Chat not found on AskDell.");
@@ -2943,10 +3269,15 @@ function loadSessionFromPackage(pkg) {
     }
   });
 
+  const welcomeCard = $("#welcome-card");
+  if (welcomeCard) welcomeCard.remove();
+
   updateSharedContextBadge(state.shareId);
   clearShareFeedback();
   setJoinButtonLoading(false);
-  $("#share-panel").style.display = "none";
+  closeAllDrawers();
+  scrollMessagesToBottom();
+  updateTokenMeter();
   showNotification(`👥 Synchronized with shared session [${state.shareId}]! Context and history loaded.`, "info");
 }
 
@@ -2957,4 +3288,647 @@ function updateSharedContextBadge(code) {
   badge.textContent = `👥 Shared: ${code}`;
   badge.title = `Group Shared Session: ${code}\nClick to view share details or invite teammates.`;
 }
+
+// ============================================================
+// DRAWER UTILITY & TOKEN METER
+// ============================================================
+function closeAllDrawers() {
+  const drawers = [
+    "#history-panel",
+    "#settings-panel",
+    "#share-panel",
+    "#export-panel",
+    "#custom-action-panel",
+    "#test-synthesizer-panel",
+    "#arena-panel",
+    "#command-palette"
+  ];
+  drawers.forEach(id => {
+    const el = $(id);
+    if (el) el.style.display = "none";
+  });
+}
+
+function updateTokenMeter() {
+  const badge = $("#token-meter-badge");
+  if (!badge) return;
+
+  let totalChars = 0;
+  if (state.pageContext && ($("#include-page-content")?.checked ?? true)) {
+    const formatted = formatTabContent(state.pageContext);
+    totalChars += formatted.length;
+  }
+  for (const msg of state.messages) {
+    totalChars += (msg.content?.length || 0);
+  }
+  const inputVal = $("#prompt-input")?.value || "";
+  totalChars += inputVal.length;
+
+  const tokens = totalChars > 0 ? estimateTokens("x".repeat(totalChars)) : 0;
+  const maxTokens = MODEL_CONTEXT_WINDOWS[state.currentModel] || 128000;
+  const pct = Math.min(100, (tokens / maxTokens) * 100);
+
+  const tokFormatted = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : `${tokens}`;
+  badge.textContent = `~${tokFormatted} tok · ${pct < 0.1 && pct > 0 ? "<0.1" : pct.toFixed(1)}%`;
+
+  const modelName = MODEL_META[state.currentModel]?.name || state.currentModel;
+  badge.title = `Estimated tokens: ~${tokens.toLocaleString()} / ${maxTokens.toLocaleString()} max for ${modelName} (${pct.toFixed(1)}% context used)`;
+
+  badge.classList.remove("token-warn", "token-danger");
+  if (pct >= 80) {
+    badge.classList.add("token-danger");
+  } else if (pct >= 50) {
+    badge.classList.add("token-warn");
+  }
+}
+
+// ============================================================
+// CUSTOM ACTIONS & PROMPT MANAGER
+// ============================================================
+async function loadCustomActions() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["askdell_custom_actions"], (res) => {
+      state.customActions = res.askdell_custom_actions || DEFAULT_CUSTOM_ACTIONS;
+      renderCustomActions();
+      resolve();
+    });
+  });
+}
+
+function renderCustomActions() {
+  const container = $("#custom-actions-container");
+  if (container) {
+    container.innerHTML = "";
+    (state.customActions || []).forEach(act => {
+      const btn = document.createElement("button");
+      btn.className = "action-btn btn-custom-chip";
+      btn.dataset.customId = act.id;
+      btn.textContent = `${act.emoji || "⚡"} ${act.title}`;
+      btn.title = `Run custom action: ${act.title}`;
+      btn.addEventListener("click", () => handleCustomActionClick(act));
+      container.appendChild(btn);
+    });
+  }
+
+  const listEl = $("#custom-actions-list");
+  const countEl = $("#custom-actions-count");
+  if (countEl) countEl.textContent = `${(state.customActions || []).length} Custom`;
+
+  if (listEl) {
+    listEl.innerHTML = "";
+    if (!state.customActions || state.customActions.length === 0) {
+      listEl.innerHTML = `<div class="empty-custom-actions">No custom actions yet. Create one above to pin it to your review bar!</div>`;
+      return;
+    }
+
+    state.customActions.forEach(act => {
+      const item = document.createElement("div");
+      item.className = "custom-action-item";
+      item.innerHTML = `
+        <div class="custom-action-item-info">
+          <div class="custom-action-item-title">${escapeHtml(act.emoji || "⚡")} ${escapeHtml(act.title)}</div>
+          <div class="custom-action-item-prompt" title="${escapeHtml(act.prompt)}">${escapeHtml(act.prompt)}</div>
+        </div>
+        <button class="btn-delete-custom-action" title="Delete custom action" data-id="${escapeHtml(act.id)}">🗑️</button>
+      `;
+
+      item.querySelector(".btn-delete-custom-action")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteCustomAction(act.id);
+      });
+
+      listEl.appendChild(item);
+    });
+  }
+}
+
+function handleCustomActionClick(act) {
+  if (state.isStreaming) {
+    showNotification("An analysis is already streaming. Stop it first.", "warning");
+    return;
+  }
+  const input = $("#prompt-input");
+  if (input) input.value = act.prompt;
+  handleUserSubmission(act.prompt, true);
+}
+
+function saveCustomAction(title, emoji, prompt) {
+  if (!title || !prompt) {
+    showNotification("Action title and prompt are required.", "warning");
+    return;
+  }
+  const id = `custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const newAction = {
+    id,
+    title: title.trim(),
+    emoji: emoji?.trim() || "⚡",
+    prompt: prompt.trim()
+  };
+  state.customActions = state.customActions || [];
+  state.customActions.push(newAction);
+  chrome.storage.local.set({ askdell_custom_actions: state.customActions }, () => {
+    renderCustomActions();
+    showNotification(`📌 Pinned action '${newAction.title}' to review bar!`, "info");
+  });
+}
+
+function deleteCustomAction(id) {
+  state.customActions = (state.customActions || []).filter(a => a.id !== id);
+  chrome.storage.local.set({ askdell_custom_actions: state.customActions }, () => {
+    renderCustomActions();
+    showNotification("🗑️ Custom action removed.", "info");
+  });
+}
+
+function toggleCustomActionsDrawer() {
+  const panel = $("#custom-action-panel");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  closeAllDrawers();
+  if (isHidden) {
+    panel.style.display = "flex";
+  }
+}
+
+// ============================================================
+// EXPORT & REPORTING SUITE
+// ============================================================
+function toggleExportDrawer() {
+  const panel = $("#export-panel");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  closeAllDrawers();
+  if (isHidden) {
+    panel.style.display = "flex";
+  }
+}
+
+function downloadMarkdownReport() {
+  if (state.messages.length === 0) {
+    showNotification("No conversation to export. Run a review or send a message first.", "warning");
+    return;
+  }
+
+  const title = state.pageContext?.title || "AskDell Dev Assistant Review Report";
+  const dateStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+  const modelName = MODEL_META[state.currentModel]?.name || state.currentModel;
+  const url = state.pageContext?.url || "N/A";
+  const tokens = estimateTokens(state.messages.map(m => m.content).join("\n"));
+
+  let md = `# 📋 ${title}\n\n`;
+  md += `> **Generated by**: AskDell Dev Assistant (v2.2.2)\n`;
+  md += `> **Date**: ${dateStr} UTC\n`;
+  md += `> **Model**: ${modelName}\n`;
+  md += `> **Reference URL**: ${url}\n`;
+  md += `> **Estimated Review Tokens**: ~${tokens.toLocaleString()}\n\n`;
+  md += `---\n\n`;
+
+  if (state.pageContext?.files?.length) {
+    md += `### 📂 Target Files Reviewed (${state.pageContext.files.length})\n\n`;
+    state.pageContext.files.forEach(f => {
+      md += `- \`${f}\`\n`;
+    });
+    md += `\n---\n\n`;
+  }
+
+  md += `### 💬 Review Dialogue & Findings\n\n`;
+  state.messages.forEach((msg) => {
+    const roleIcon = msg.role === "user" ? "👤 **User / Reviewer**" : `🤖 **${msg.author || modelName}**`;
+    const time = msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : "";
+    md += `#### ${roleIcon} ${time ? `*(${time})*` : ""}\n\n`;
+    md += `${msg.content}\n\n`;
+    md += `---\n\n`;
+  });
+
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const filename = `AskDell-Review-${Date.now()}.md`;
+  a.href = downloadUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(downloadUrl);
+
+  showNotification(`📄 Report '${filename}' downloaded!`, "info");
+}
+
+function copyAsPRComment() {
+  const lastAssistant = [...state.messages].reverse().find(m => m.role === "assistant");
+  if (!lastAssistant) {
+    showNotification("No AI review response found to copy as PR comment.", "warning");
+    return;
+  }
+
+  const modelName = MODEL_META[state.currentModel]?.name || state.currentModel;
+  let text = `## 🔍 AskDell AI Code Review\n\n`;
+  text += `> *Reviewed with **AskDell Dev Assistant** using **${modelName}***\n\n`;
+  text += `${lastAssistant.content}\n\n`;
+  text += `---\n`;
+  text += `*Automated review powered by [AskDell](https://ask.dell.com)*\n`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    showNotification("📋 Copied formatted PR Review Comment to clipboard!", "info");
+  }).catch(() => {
+    showNotification("Failed to copy to clipboard.", "error");
+  });
+}
+
+function copyAsJiraComment() {
+  const lastAssistant = [...state.messages].reverse().find(m => m.role === "assistant");
+  if (!lastAssistant) {
+    showNotification("No AI review response found to copy as Jira issue.", "warning");
+    return;
+  }
+
+  const title = state.pageContext?.title || "Code Review Findings";
+  let jira = `h2. AskDell Code Review — ${title}\n\n`;
+  jira += `*Model*: ${MODEL_META[state.currentModel]?.name || state.currentModel}\n`;
+  jira += `*Date*: ${new Date().toLocaleDateString()}\n\n`;
+  jira += `h3. Summary of Findings\n\n`;
+  jira += `${lastAssistant.content}\n`;
+
+  navigator.clipboard.writeText(jira).then(() => {
+    showNotification("📋 Copied Jira issue description to clipboard!", "info");
+  }).catch(() => {
+    showNotification("Failed to copy to clipboard.", "error");
+  });
+}
+
+// ============================================================
+// COMMAND PALETTE (CTRL+K / CMD+K)
+// ============================================================
+let cmdPaletteActiveIndex = 0;
+let filteredCommands = [];
+
+const COMMAND_CATALOG = [
+  // Developer Actions
+  { id: "action-full-review", title: "Full PR Code Review", category: "Action", icon: "🔍", action: () => executeQuickAction("full-review") },
+  { id: "action-security", title: "Security Vulnerability Audit (OWASP)", category: "Action", icon: "🛡️", action: () => executeQuickAction("security") },
+  { id: "action-ci-diagnose", title: "CI/CD Failure & Stack Trace Diagnoser", category: "Action", icon: "🚨", action: () => executeQuickAction("ci-diagnose") },
+  { id: "action-performance", title: "Performance & Complexity Analysis", category: "Action", icon: "⚡", action: () => executeQuickAction("performance") },
+  { id: "action-clean-code", title: "Clean Code & SOLID Audit", category: "Action", icon: "🧹", action: () => executeQuickAction("clean-code") },
+  { id: "action-test-cases", title: "Generate Unit Test Matrix", category: "Action", icon: "🧪", action: () => executeQuickAction("test-cases") },
+  { id: "action-explain", title: "Explain Logic & Architecture", category: "Action", icon: "💡", action: () => executeQuickAction("explain") },
+  { id: "action-debug", title: "Debug Subtle Issues & Race Conditions", category: "Action", icon: "🐛", action: () => executeQuickAction("debug") },
+  { id: "action-docs", title: "Generate Markdown Documentation", category: "Action", icon: "📖", action: () => executeQuickAction("document") },
+  { id: "action-refactor", title: "Refactoring & Design Patterns", category: "Action", icon: "♻️", action: () => executeQuickAction("refactor") },
+  { id: "action-architecture", title: "Architecture & Modularity Review", category: "Action", icon: "🏗️", action: () => executeQuickAction("architecture") },
+  { id: "action-api-review", title: "API Contract & REST/GraphQL Review", category: "Action", icon: "🔗", action: () => executeQuickAction("api-review") },
+
+  // Power Tools
+  { id: "tool-test-builder", title: "Framework Test Suite Synthesizer", category: "Tool", icon: "🧪", action: () => toggleTestSynthesizerDrawer() },
+  { id: "tool-arena", title: "Model Review Arena (A/B Compare)", category: "Tool", icon: "⚖️", action: () => toggleArenaDrawer() },
+  { id: "tool-custom-action", title: "Create / Manage Custom Review Actions", category: "Tool", icon: "⚡", action: () => toggleCustomActionsDrawer() },
+
+  // Models
+  { id: "model-claude-opus", title: "Switch Model: Claude Opus 4.6", category: "Model", icon: "🟣", action: () => selectModelFromPalette("claude-opus-4-6") },
+  { id: "model-claude-sonnet", title: "Switch Model: Claude Sonnet 5", category: "Model", icon: "🟣", action: () => selectModelFromPalette("claude-sonnet-5") },
+  { id: "model-gemini-flash", title: "Switch Model: Gemini 3.8 Flash", category: "Model", icon: "🔵", action: () => selectModelFromPalette("gemini-3.8-flash") },
+  { id: "model-gemini-pro", title: "Switch Model: Gemini 3.1 Pro Preview", category: "Model", icon: "🔵", action: () => selectModelFromPalette("gemini-3.1-pro-preview") },
+  { id: "model-llama", title: "Switch Model: Llama-3.3 70B Instruct", category: "Model", icon: "🦙", action: () => selectModelFromPalette("llama-3.3-70b-instruct") },
+
+  // Export & Drawers
+  { id: "export-markdown", title: "Download Full Markdown Report (.md)", category: "Export", icon: "📄", action: () => downloadMarkdownReport() },
+  { id: "export-pr-comment", title: "Copy Review as PR Comment (GitHub/GitLab)", category: "Export", icon: "📋", action: () => copyAsPRComment() },
+  { id: "export-jira", title: "Copy Review as Jira Issue Description", category: "Export", icon: "📋", action: () => copyAsJiraComment() },
+  { id: "drawer-history", title: "Open Conversation History", category: "Navigation", icon: "📜", action: () => toggleHistoryDrawer() },
+  { id: "drawer-share", title: "Open Team Collaboration & Share", category: "Navigation", icon: "👥", action: () => toggleShareDrawer() },
+  { id: "drawer-settings", title: "Open Extension Settings", category: "Navigation", icon: "⚙️", action: () => toggleSettingsDrawer() },
+  { id: "chat-new", title: "Start New Conversation / Clear Chat", category: "Chat", icon: "✨", action: () => startNewChat() }
+];
+
+function initCommandPalette() {
+  const palette = $("#command-palette");
+  const input = $("#cmd-palette-input");
+  const list = $("#cmd-palette-list");
+  if (!palette || !input || !list) return;
+
+  window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      toggleCommandPalette();
+    } else if (e.key === "Escape" && palette.style.display !== "none") {
+      e.preventDefault();
+      closeCommandPalette();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    renderFilteredCommands(input.value);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (filteredCommands.length > 0) {
+        cmdPaletteActiveIndex = (cmdPaletteActiveIndex + 1) % filteredCommands.length;
+        updateActiveCommandUI();
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (filteredCommands.length > 0) {
+        cmdPaletteActiveIndex = (cmdPaletteActiveIndex - 1 + filteredCommands.length) % filteredCommands.length;
+        updateActiveCommandUI();
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredCommands[cmdPaletteActiveIndex]) {
+        executeCommandPaletteItem(filteredCommands[cmdPaletteActiveIndex]);
+      }
+    }
+  });
+
+  $("#btn-close-cmd-palette")?.addEventListener("click", closeCommandPalette);
+
+  palette.addEventListener("click", (e) => {
+    if (e.target === palette) {
+      closeCommandPalette();
+    }
+  });
+}
+
+function toggleCommandPalette() {
+  const palette = $("#command-palette");
+  if (!palette) return;
+  if (palette.style.display !== "none") {
+    closeCommandPalette();
+  } else {
+    openCommandPalette();
+  }
+}
+
+function openCommandPalette() {
+  const palette = $("#command-palette");
+  const input = $("#cmd-palette-input");
+  if (!palette) return;
+  closeAllDrawers();
+  palette.style.display = "flex";
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  cmdPaletteActiveIndex = 0;
+  renderFilteredCommands("");
+}
+
+function closeCommandPalette() {
+  const palette = $("#command-palette");
+  if (palette) palette.style.display = "none";
+}
+
+function renderFilteredCommands(query) {
+  const list = $("#cmd-palette-list");
+  if (!list) return;
+
+  const q = (query || "").trim().toLowerCase();
+  filteredCommands = COMMAND_CATALOG.filter(cmd => {
+    if (!q) return true;
+    return cmd.title.toLowerCase().includes(q) ||
+           cmd.category.toLowerCase().includes(q) ||
+           cmd.id.toLowerCase().includes(q);
+  });
+
+  cmdPaletteActiveIndex = 0;
+  list.innerHTML = "";
+
+  if (filteredCommands.length === 0) {
+    list.innerHTML = `<div class="empty-custom-actions">No matching commands found for "${escapeHtml(query)}"</div>`;
+    return;
+  }
+
+  filteredCommands.forEach((cmd, idx) => {
+    const item = document.createElement("div");
+    item.className = `cmd-palette-item ${idx === 0 ? "active" : ""}`;
+    item.dataset.index = idx;
+    item.innerHTML = `
+      <div class="cmd-item-left">
+        <span>${cmd.icon}</span>
+        <span>${escapeHtml(cmd.title)}</span>
+      </div>
+      <span class="cmd-item-category">${escapeHtml(cmd.category)}</span>
+    `;
+
+    item.addEventListener("mouseenter", () => {
+      cmdPaletteActiveIndex = idx;
+      updateActiveCommandUI();
+    });
+
+    item.addEventListener("click", () => {
+      executeCommandPaletteItem(cmd);
+    });
+
+    list.appendChild(item);
+  });
+}
+
+function updateActiveCommandUI() {
+  const items = $$(".cmd-palette-item");
+  items.forEach((it, idx) => {
+    it.classList.toggle("active", idx === cmdPaletteActiveIndex);
+    if (idx === cmdPaletteActiveIndex) {
+      it.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+
+function executeCommandPaletteItem(cmd) {
+  closeCommandPalette();
+  if (cmd && typeof cmd.action === "function") {
+    cmd.action();
+  }
+}
+
+function selectModelFromPalette(modelId) {
+  state.currentModel = modelId;
+  const sel = $("#model-selector");
+  if (sel) sel.value = modelId;
+  updateModelUI();
+  updateTokenMeter();
+  showNotification(`🤖 Switched active model to ${MODEL_META[modelId]?.name || modelId}`, "info");
+}
+
+// ============================================================
+// FRAMEWORK TEST SUITE SYNTHESIZER
+// ============================================================
+function toggleTestSynthesizerDrawer() {
+  const panel = $("#test-synthesizer-panel");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  closeAllDrawers();
+  if (isHidden) {
+    panel.style.display = "flex";
+  }
+}
+
+function handleRunTestSynthesizer() {
+  const frameworkInput = document.querySelector('input[name="test-framework"]:checked');
+  const framework = frameworkInput ? frameworkInput.value : "Jest / Vitest";
+
+  const strategies = [];
+  if ($("#test-strat-boundary")?.checked) strategies.push("Boundary & Edge Limits");
+  if ($("#test-strat-mocks")?.checked) strategies.push("Mock External APIs & DB");
+  if ($("#test-strat-table")?.checked) strategies.push("Table-Driven / Parameterized Cases");
+  if ($("#test-strat-errors")?.checked) strategies.push("Error & Exception Handling Paths");
+
+  const customNotes = $("#test-custom-notes")?.value?.trim() || "";
+
+  closeAllDrawers();
+
+  let prompt = `Generate a complete, production-grade automated test suite using **${framework}** for the provided code changes / active component.\n\n`;
+  prompt += `**Required Strategies**:\n${strategies.map(s => `- ${s}`).join("\n")}\n\n`;
+  if (customNotes) {
+    prompt += `**Fixture & Implementation Notes**:\n${customNotes}\n\n`;
+  }
+  prompt += `Provide fully runnable code with imports, mocks, test fixtures, and assertions following AAA (Arrange-Act-Assert) conventions.`;
+
+  handleUserSubmission(prompt, true);
+}
+
+// ============================================================
+// MULTI-MODEL REVIEW ARENA (A/B COMPARE)
+// ============================================================
+function toggleArenaDrawer() {
+  const panel = $("#arena-panel");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  closeAllDrawers();
+  if (isHidden) {
+    panel.style.display = "flex";
+  }
+}
+
+async function handleRunArena() {
+  const modelA = $("#arena-model-a")?.value || "claude-opus-4-6";
+  const modelB = $("#arena-model-b")?.value || "gemini-3.8-flash";
+  const prompt = $("#arena-prompt-input")?.value?.trim() || "Full PR Review: evaluate architecture, correctness, logic flaws, and optimizations.";
+
+  closeAllDrawers();
+
+  if (modelA === modelB) {
+    showNotification("Select two different models for A/B comparison.", "warning");
+    return;
+  }
+
+  const welcomeCard = $("#welcome-card");
+  if (welcomeCard) welcomeCard.remove();
+
+  // Render user prompt with arena badge
+  renderUserMessage(prompt, state.pageContext ? formatTabContent(state.pageContext) : null, "arena-user-prompt", state.userName);
+  state.messages.push({
+    role: "user",
+    author: state.userName || "You",
+    content: prompt,
+    timestamp: Math.floor(Date.now() / 1000)
+  });
+
+  // Render dual arena card
+  const metaA = MODEL_META[modelA] || { name: modelA, icon: "🟣", color: "claude" };
+  const metaB = MODEL_META[modelB] || { name: modelB, icon: "🔵", color: "gemini" };
+
+  const container = $("#messages");
+  const arenaWrapper = document.createElement("div");
+  arenaWrapper.className = "message-wrapper assistant arena-wrapper";
+
+  const arenaContainer = document.createElement("div");
+  arenaContainer.className = "arena-split-container";
+
+  // Col A
+  const colA = document.createElement("div");
+  colA.className = `arena-col model-${metaA.color}-border`;
+  colA.innerHTML = `
+    <div class="arena-col-header">
+      <div class="arena-col-title">
+        <span>${metaA.icon}</span>
+        <span>${metaA.name}</span>
+      </div>
+      <button class="arena-copy-btn arena-copy-a">Copy</button>
+    </div>
+    <div class="markdown-body arena-body-a"><p><em>Analyzing...</em></p></div>
+  `;
+
+  // Col B
+  const colB = document.createElement("div");
+  colB.className = `arena-col model-${metaB.color}-border`;
+  colB.innerHTML = `
+    <div class="arena-col-header">
+      <div class="arena-col-title">
+        <span>${metaB.icon}</span>
+        <span>${metaB.name}</span>
+      </div>
+      <button class="arena-copy-btn arena-copy-b">Copy</button>
+    </div>
+    <div class="markdown-body arena-body-b"><p><em>Analyzing...</em></p></div>
+  `;
+
+  arenaContainer.appendChild(colA);
+  arenaContainer.appendChild(colB);
+  arenaWrapper.appendChild(arenaContainer);
+  container.appendChild(arenaWrapper);
+  scrollMessagesToBottom();
+
+  const bodyA = colA.querySelector(".arena-body-a");
+  const bodyB = colB.querySelector(".arena-body-b");
+
+  // Copy handlers
+  colA.querySelector(".arena-copy-a")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(bodyA.innerText || bodyA.textContent);
+    showNotification(`📋 Copied ${metaA.name} response!`, "info");
+  });
+  colB.querySelector(".arena-copy-b")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(bodyB.innerText || bodyB.textContent);
+    showNotification(`📋 Copied ${metaB.name} response!`, "info");
+  });
+
+  if (state.demoMode || !state.connection || state.connection.status !== "connected") {
+    // Generate simulated responses for both models
+    const respA = generateDemoResponse(prompt, state.pageContext, modelA);
+    const respB = generateDemoResponse(prompt, state.pageContext, modelB);
+
+    bodyA.innerHTML = renderMarkdown(respA);
+    bodyB.innerHTML = renderMarkdown(respB);
+    attachCodeBlockCopyButtons(bodyA);
+    attachCodeBlockCopyButtons(bodyB);
+
+    state.messages.push({ role: "assistant", author: `Arena: ${metaA.name}`, content: respA, timestamp: Math.floor(Date.now() / 1000) });
+    state.messages.push({ role: "assistant", author: `Arena: ${metaB.name}`, content: respB, timestamp: Math.floor(Date.now() / 1000) });
+    updateTokenMeter();
+    scrollMessagesToBottom();
+  } else {
+    // Live Parallel Execution via AskDell Bridge
+    try {
+      const tab = await findAskDellTab();
+      if (!tab) throw new Error("No AskDell tab found");
+
+      const [resA, resB] = await Promise.all([
+        chrome.tabs.sendMessage(tab.id, { type: "ASKDELL_GENERATE_SYNC", model: modelA, prompt, context: state.pageContext }),
+        chrome.tabs.sendMessage(tab.id, { type: "ASKDELL_GENERATE_SYNC", model: modelB, prompt, context: state.pageContext })
+      ]);
+
+      const textA = resA?.content || "No response received from Model A.";
+      const textB = resB?.content || "No response received from Model B.";
+
+      bodyA.innerHTML = renderMarkdown(textA);
+      bodyB.innerHTML = renderMarkdown(textB);
+      attachCodeBlockCopyButtons(bodyA);
+      attachCodeBlockCopyButtons(bodyB);
+
+      state.messages.push({ role: "assistant", author: `Arena: ${metaA.name}`, content: textA, timestamp: Math.floor(Date.now() / 1000) });
+      state.messages.push({ role: "assistant", author: `Arena: ${metaB.name}`, content: textB, timestamp: Math.floor(Date.now() / 1000) });
+      updateTokenMeter();
+      scrollMessagesToBottom();
+    } catch (err) {
+      // Fallback
+      const respA = generateDemoResponse(prompt, state.pageContext, modelA);
+      const respB = generateDemoResponse(prompt, state.pageContext, modelB);
+      bodyA.innerHTML = renderMarkdown(respA);
+      bodyB.innerHTML = renderMarkdown(respB);
+      attachCodeBlockCopyButtons(bodyA);
+      attachCodeBlockCopyButtons(bodyB);
+      updateTokenMeter();
+    }
+  }
+}
+
 
