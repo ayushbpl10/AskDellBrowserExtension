@@ -756,3 +756,23 @@ function generateSessionId(length = 20) {
     .map((b) => chars[b % chars.length])
     .join("");
 }
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    get AVAILABLE_MODELS() { return AVAILABLE_MODELS; },
+    set AVAILABLE_MODELS(v) { AVAILABLE_MODELS = v; },
+    pingKeepAlive,
+    startKeepAlive,
+    ensureSession,
+    fetchModels,
+    mergeDiscoveredModels,
+    checkAuth,
+    createChat,
+    getChatHistory,
+    getChat,
+    shareChat,
+    getSharedChat,
+    extractChatFromDom,
+    handleChatStream,
+    generateSessionId
+  };
+}

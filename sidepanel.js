@@ -4026,7 +4026,14 @@ if (typeof module !== "undefined" && module.exports) {
     updateContextBarUI,
     setupMessageListeners,
     setupEventListeners,
-    updateCharCounter
+    updateCharCounter,
+    updateModelDropdowns,
+    runStreamWithBridge,
+    showShareFeedback,
+    clearShareFeedback,
+    handleCustomActionClick,
+    updateStreamStatus,
+    updateUIStreamingState
   };
 }
 

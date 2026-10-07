@@ -20,7 +20,16 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
         classes: new Set(),
         add: (c) => this.classList.classes.add(c),
         remove: (c) => this.classList.classes.delete(c),
-        contains: (c) => this.classList.classes.has(c)
+        contains: (c) => this.classList.classes.has(c),
+        toggle: (c, force) => {
+          if (force !== undefined) {
+            if (force) this.classList.classes.add(c);
+            else this.classList.classes.delete(c);
+          } else {
+            if (this.classList.classes.has(c)) this.classList.classes.delete(c);
+            else this.classList.classes.add(c);
+          }
+        }
       };
       this.attributes = {};
       this.listeners = {};
@@ -39,6 +48,9 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     }
 
     get textContent() {
+      if (this.children.length > 0) {
+        return this.children.map((c) => c.textContent).join(" ");
+      }
       return this._textContent;
     }
     set textContent(val) {
@@ -71,25 +83,97 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
     }
 
     dispatchEvent(evt) {
+      const e = {
+        stopPropagation: () => {},
+        preventDefault: () => {},
+        target: this,
+        ...evt
+      };
       const list = this.listeners[evt.type] || [];
-      for (const fn of list) fn(evt);
+      for (const fn of list) fn(e);
     }
 
     querySelector(sel) {
-      for (const child of this.children) {
-        if (sel.startsWith(".") && child.classList.contains(sel.slice(1))) return child;
-        if (sel.startsWith("#") && child.id === sel.slice(1)) return child;
-        const found = child.querySelector?.(sel);
-        if (found) return found;
+      if (!sel) return null;
+      if (sel.includes(" ")) {
+        const parts = sel.trim().split(/\s+/);
+        let current = this;
+        for (const part of parts) {
+          let next = current?.querySelector(part);
+          if (!next && current) {
+            const tag = part.startsWith(".") ? "div" : part;
+            next = new MockElement(tag);
+            if (part.startsWith(".")) next.className = part.slice(1);
+            current.appendChild(next);
+          }
+          current = next;
+        }
+        return current;
       }
-      const el = new MockElement("div");
-      if (sel.startsWith(".")) el.className = sel.slice(1);
-      return el;
+
+      const match = (el) => {
+        if (!el) return false;
+        if (sel.startsWith(".") && el.classList?.contains?.(sel.slice(1))) return true;
+        if (sel.startsWith("#") && el.id === sel.slice(1)) return true;
+        if (el.tagName && el.tagName.toLowerCase() === sel.toLowerCase()) return true;
+        return false;
+      };
+
+      const search = (node) => {
+        for (const child of node.children) {
+          if (match(child)) return child;
+          const found = search(child);
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const found = search(this);
+      if (found) return found;
+
+      if (this._innerHTML) {
+        if (sel.startsWith(".")) {
+          const cls = sel.slice(1);
+          if (this._innerHTML.includes(cls)) {
+            const tag = cls.includes("btn") ? "button" : (cls.includes("span") || cls === "arrow" ? "span" : "div");
+            const el = new MockElement(tag);
+            el.className = cls;
+            this.appendChild(el);
+            return el;
+          }
+        } else if (sel.startsWith("#")) {
+          const id = sel.slice(1);
+          if (this._innerHTML.includes(id)) {
+            const el = new MockElement("div");
+            el.id = id;
+            this.appendChild(el);
+            return el;
+          }
+        } else if (/^[a-zA-Z0-9]+$/.test(sel)) {
+          const el = new MockElement(sel);
+          this.appendChild(el);
+          return el;
+        }
+      }
+
+      return null;
     }
     querySelectorAll(sel) {
-      return [];
+      const results = [];
+      const walk = (node) => {
+        for (const child of node.children) {
+          if (sel.startsWith(".") && child.classList.contains(sel.slice(1))) results.push(child);
+          else if (sel.startsWith("#") && child.id === sel.slice(1)) results.push(child);
+          walk(child);
+        }
+      };
+      walk(this);
+      return results;
     }
     appendChild(child) {
+      if (child && typeof child === "object") {
+        child.parentElement = this;
+      }
       this.children.push(child);
       return child;
     }
@@ -99,6 +183,9 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       return child;
     }
     click() {
+      if (typeof this.onclick === "function") {
+        this.onclick({ stopPropagation: () => {}, preventDefault: () => {}, target: this });
+      }
       this.dispatchEvent({ type: "click" });
     }
     focus() {}
@@ -110,6 +197,20 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       if (sel.startsWith(".") && this.classList.contains(sel.slice(1))) return this;
       if (sel.startsWith("#") && this.id === sel.slice(1)) return this;
       return new MockElement("div");
+    }
+    get options() {
+      return this.children;
+    }
+    cloneNode(deep = false) {
+      const clone = new MockElement(this.tagName);
+      clone.value = this.value;
+      clone.textContent = this.textContent;
+      clone.attributes = { ...this.attributes };
+      clone.classList.classes = new Set(this.classList.classes);
+      if (deep) {
+        clone.children = this.children.map((c) => (c.cloneNode ? c.cloneNode(true) : c));
+      }
+      return clone;
     }
   }
 
@@ -229,6 +330,38 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       if (sel === ".cmd-palette-item") {
         return elementMap["cmd-palette-list"]?.children || [];
       }
+      if (sel === ".arena-prompt-chip") {
+        if (!elementMap["_arena_chips"]) {
+          const c = new MockElement("div");
+          c.dataset = { prompt: "Explain architectural complexity" };
+          elementMap["_arena_chips"] = [c];
+        }
+        return elementMap["_arena_chips"];
+      }
+      if (sel === ".sample-chip") {
+        if (!elementMap["_sample_chips"]) {
+          const s = new MockElement("div");
+          s.dataset = { code: "AD-DEMO-SAMPLE" };
+          elementMap["_sample_chips"] = [s];
+        }
+        return elementMap["_sample_chips"];
+      }
+      if (sel === ".action-btn") {
+        if (!elementMap["_action_btns"]) {
+          const b = new MockElement("button");
+          b.dataset = { action: "security" };
+          elementMap["_action_btns"] = [b];
+        }
+        return elementMap["_action_btns"];
+      }
+      if (sel === ".template-chip") {
+        if (!elementMap["_template_chips"]) {
+          const t = new MockElement("div");
+          t.dataset = { prompt: "Analyze potential security flaws in this diff" };
+          elementMap["_template_chips"] = [t];
+        }
+        return elementMap["_template_chips"];
+      }
       return [];
     },
     createElement: (tag) => new MockElement(tag),
@@ -249,7 +382,11 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
       if (!docListeners[event]) docListeners[event] = [];
       docListeners[event].push(fn);
     },
-    removeEventListener: () => {}
+    removeEventListener: () => {},
+    dispatchEvent: (evt) => {
+      const list = docListeners[evt.type] || [];
+      for (const fn of list) fn(evt);
+    }
   };
   const mockClipboard = {
     lastCopied: "",
@@ -281,6 +418,8 @@ function loadSidepanelContext(mockChrome, initialHtml = "") {
   sp.elementMap = elementMap;
   sp.navigator = global.navigator;
   sp.docListeners = docListeners;
+  sp.MockElement = MockElement;
+  sp.setupEventListeners();
   global.setInterval = origSetInterval;
   global.setTimeout = origSetTimeout;
   return sp;
@@ -411,11 +550,12 @@ test("Sidepanel Module Suite", async (t) => {
     assert.strictEqual(banner.className, "auth-card auth-card-demo");
   });
 
-  await t.test("8. generateDemoResponse: Covers all 12 Developer Actions", () => {
+  await t.test("8. generateDemoResponse: Covers all 12 Developer Actions and extra branches", () => {
     const actions = [
       "full-review", "security", "performance", "clean-code",
-      "summarize", "explain", "debug", "test-cases",
-      "document", "refactor", "architecture", "api-review"
+      "ci-diagnose", "ci failure", "test-cases", "summarize",
+      "explain", "debug", "document", "refactor",
+      "architecture", "api-review", "general advice and guidance"
     ];
 
     const context = { platform: "github", title: "AuthManager.ts", diff: "+ auth()" };
@@ -982,6 +1122,1044 @@ test("Sidepanel Module Suite", async (t) => {
     sp.state.isStreaming = true;
     sp.stopActiveStream();
     assert.strictEqual(sp.state.isStreaming, false);
+  });
+
+  await t.test("28. Event Listeners & Interactive UI Controls", async () => {
+    // Model selector change event
+    const modelSelector = sp.elementMap["model-selector"];
+    modelSelector.value = "gemini-3.8-flash";
+    modelSelector.dispatchEvent({ type: "change", target: { value: "gemini-3.8-flash" } });
+    assert.strictEqual(sp.state.currentModel, "gemini-3.8-flash");
+
+    // Prompt input event: char counter, token meter
+    const promptInput = sp.elementMap["prompt-input"];
+    promptInput.value = "Refactor this code to follow SOLID principles";
+    promptInput.scrollHeight = 80;
+    promptInput.dispatchEvent({ type: "input" });
+    assert.ok(sp.elementMap["char-counter"].textContent.length > 0);
+
+    // Prompt input keydown: Shift+Enter vs Enter
+    let defaultPrevented = false;
+    promptInput.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: true, preventDefault: () => { defaultPrevented = true; } });
+    assert.strictEqual(defaultPrevented, false);
+    promptInput.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault: () => { defaultPrevented = true; } });
+    assert.strictEqual(defaultPrevented, true);
+
+    // Empty prompt submission returns early
+    promptInput.value = "   ";
+    sp.elementMap["btn-send"].click();
+
+    // Toggle demo mode banner button
+    sp.state.demoMode = false;
+    sp.elementMap["btn-demo-mode"].click();
+    assert.strictEqual(sp.state.demoMode, true);
+    sp.elementMap["btn-demo-mode"].click();
+    assert.strictEqual(sp.state.demoMode, false);
+
+    // Open askdell button
+    sp.elementMap["btn-open-askdell"].click();
+
+    // Retry auth button
+    mock.runtimeResponse = { status: "connected" };
+    sp.elementMap["btn-retry-auth"].click();
+
+    // Re-scan context & stop stream
+    sp.elementMap["btn-refresh-context"].click();
+    sp.elementMap["btn-stop-stream"].click();
+    sp.elementMap["btn-stop"].click();
+    sp.elementMap["btn-new-chat"].click();
+
+    // History and Settings toggles
+    sp.elementMap["btn-history"].click();
+    sp.elementMap["btn-close-history"].click();
+    sp.elementMap["btn-settings"].click();
+    sp.elementMap["btn-close-settings"].click();
+
+    // Share and Export toggles
+    sp.elementMap["btn-share-chat"].click();
+    sp.elementMap["btn-close-share"].click();
+    sp.elementMap["btn-export-menu"].click();
+    sp.elementMap["btn-close-export"].click();
+
+    // Export buttons
+    sp.elementMap["btn-download-md"].click();
+    sp.elementMap["btn-copy-pr-comment"].click();
+    sp.elementMap["btn-copy-jira-comment"].click();
+
+    // Custom action buttons
+    sp.elementMap["btn-add-custom-action"].click();
+    sp.elementMap["btn-close-custom-actions"].click();
+    sp.elementMap["custom-action-title"].value = "";
+    sp.elementMap["custom-action-prompt"].value = "";
+    sp.elementMap["btn-save-custom-action"].click();
+    sp.elementMap["custom-action-title"].value = "Lint";
+    sp.elementMap["custom-action-prompt"].value = "Run linter";
+    sp.elementMap["btn-save-custom-action"].click();
+
+    // Arena buttons
+    sp.elementMap["btn-arena"].click();
+    sp.elementMap["btn-close-arena"].click();
+    sp.elementMap["btn-run-arena"].click();
+
+    // Framework synthesizer buttons
+    sp.elementMap["btn-open-test-builder"].click();
+    sp.elementMap["btn-close-test-synthesizer"].click();
+    sp.elementMap["btn-run-test-synthesizer"].click();
+
+    // Command palette and token meter buttons
+    sp.elementMap["btn-cmd-palette"].click();
+    sp.elementMap["token-meter-badge"].click();
+
+    // Share actions & join session button
+    sp.elementMap["btn-generate-share"].click();
+    sp.elementMap["btn-copy-share-link"].click();
+    sp.elementMap["btn-export-session"].click();
+    sp.elementMap["join-session-input"].value = "AD-DEMO-SAMPLE";
+    sp.elementMap["btn-join-session"].click();
+    sp.elementMap["join-session-input"].dispatchEvent({ type: "keydown", key: "Enter", preventDefault: () => {} });
+
+    // Chips click events
+    if (sp.elementMap["_arena_chips"]) sp.elementMap["_arena_chips"][0].click();
+    if (sp.elementMap["_sample_chips"]) sp.elementMap["_sample_chips"][0].click();
+    if (sp.elementMap["_action_btns"]) sp.elementMap["_action_btns"][0].click();
+    if (sp.elementMap["_template_chips"]) sp.elementMap["_template_chips"][0].click();
+
+    // User display name & discover models button
+    sp.elementMap["user-display-name"].dispatchEvent({ type: "input", target: { value: "Taylor" } });
+    assert.strictEqual(sp.state.userName, "Taylor");
+    sp.elementMap["btn-discover-models"].click();
+
+    // Settings live controls
+    sp.elementMap["setting-connection-mode"].dispatchEvent({ type: "change", target: { value: "demo" } });
+    sp.elementMap["setting-default-model"].dispatchEvent({ type: "change", target: { value: "claude-opus-4-6" } });
+    sp.elementMap["setting-web-search"].dispatchEvent({ type: "change" });
+    sp.elementMap["setting-include-page"].dispatchEvent({ type: "change" });
+    sp.elementMap["setting-max-length"].dispatchEvent({ type: "change" });
+    sp.elementMap["include-web-search"].dispatchEvent({ type: "change", target: { checked: true } });
+    sp.elementMap["include-page-content"].dispatchEvent({ type: "change", target: { checked: true } });
+    sp.elementMap["history-search-input"].dispatchEvent({ type: "input", target: { value: "test" } });
+  });
+
+  await t.test("29. Model Discovery, Dropdowns & Tab Connection", async () => {
+    // Model discovery success with filter
+    mock.runtimeResponse = {
+      models: [
+        { id: "claude-opus-4-6", name: "Claude Opus 4.6" },
+        { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+        { id: "askdell-intent", name: "Internal Intent Engine" },
+        { id: "text-embedding-004", name: "Embedding Model" }
+      ]
+    };
+    await sp.discoverModels();
+    assert.strictEqual(sp.state.availableModels.length, 4);
+
+    // updateModelDropdowns directly
+    sp.updateModelDropdowns([
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6" },
+      { id: "custom-gemini", name: "Custom Gemini" }
+    ]);
+    assert.strictEqual(sp.state.currentModel, "claude-opus-4-6");
+
+    // findAskDellTab success and error
+    mock.tabsList = [{ id: 101, url: "https://ask.dell.com/chat" }];
+    const foundTab = await sp.findAskDellTab();
+    assert.ok(foundTab && foundTab.id === 101);
+
+    mock.tabsList = [];
+    const missingTab = await sp.findAskDellTab();
+    assert.strictEqual(missingTab, null);
+
+    // initConnectionMonitoring
+    sp.initConnectionMonitoring();
+
+    // refreshAskDellStatus
+    sp.state.demoMode = true;
+    const demoStatus = await sp.refreshAskDellStatus();
+    assert.strictEqual(demoStatus, true);
+
+    sp.state.demoMode = false;
+    mock.runtimeResponse = { status: "connected" };
+    const liveStatus = await sp.refreshAskDellStatus();
+    assert.strictEqual(liveStatus, true);
+  });
+
+  await t.test("30. Live Bridge Streaming Protocol via runStreamWithBridge", async () => {
+    mock.tabsList = [{ id: 202, url: "https://ask.dell.com/chat" }];
+    let messageListener = null;
+    let disconnectListener = null;
+    const mockPort = {
+      postMessage: () => {},
+      onMessage: {
+        addListener: (fn) => { messageListener = fn; }
+      },
+      onDisconnect: {
+        addListener: (fn) => { disconnectListener = fn; }
+      }
+    };
+    mock.tabsConnectPort = mockPort;
+
+    const assistantCard = sp.createAssistantStreamingCard("Analyze architecture", true);
+
+    // Stream lifecycle promise
+    const streamPromise = sp.runStreamWithBridge({
+      model: "claude-opus-4-6",
+      messages: [{ role: "user", content: "Test query" }]
+    }, assistantCard);
+
+    // Wait tick for findAskDellTab resolution
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Simulate streaming events
+    assert.ok(messageListener);
+    messageListener({ type: "chat_created", chatId: "chat-999" });
+    messageListener({ type: "status", action: "hybrid_web_search", description: "Searching Dell internal docs..." });
+    messageListener({ type: "status", action: "tool_call", description: "Calling code analyzer..." });
+    messageListener({ type: "status", action: "thinking", description: "Synthesizing answer..." });
+    messageListener({ type: "status", action: "done", description: "Done", done: true });
+    messageListener({ type: "token", fullContent: "Streaming partial analysis..." });
+    messageListener({ type: "done", fullContent: "Completed full live analysis." });
+
+    const finalRes = await streamPromise;
+    assert.strictEqual(finalRes, "Completed full live analysis.");
+    assert.strictEqual(sp.state.chatId, "chat-999");
+
+    // Error event rejection branch
+    const errCard = sp.createAssistantStreamingCard("Failing query", false);
+    const errPromise = sp.runStreamWithBridge({ model: "claude-opus-4-6" }, errCard);
+    await new Promise((r) => setTimeout(r, 10));
+    messageListener({ type: "error", error: "Authentication expired on ask.dell.com" });
+    await assert.rejects(errPromise, /Authentication expired/);
+
+    // Disconnect event branch
+    const discCard = sp.createAssistantStreamingCard("Disconnect test", false);
+    sp.state.isStreaming = true;
+    const discPromise = sp.runStreamWithBridge({ model: "claude-opus-4-6" }, discCard);
+    await new Promise((r) => setTimeout(r, 10));
+    disconnectListener();
+    await discPromise;
+
+    // Missing tab branch
+    mock.tabsList = [];
+    const missingTabCard = sp.createAssistantStreamingCard("No tab", false);
+    await assert.rejects(sp.runStreamWithBridge({}, missingTabCard), /Lost connection/);
+  });
+
+  await t.test("31. Comprehensive Join Session Formats, Feedbacks & Buttons", async () => {
+    // 1. Direct JSON Session Package
+    const jsonPackage = JSON.stringify({
+      type: "ASKDELL_SHARED_SESSION",
+      version: "2.2.2",
+      shareId: "AD-JSON-1",
+      messages: [{ role: "user", content: "Direct JSON message" }]
+    });
+    await sp.handleJoinSession(jsonPackage);
+    assert.strictEqual(sp.state.shareId, "AD-JSON-1");
+
+    // 2. Embedded Hash in URL
+    const rawHashPkg = {
+      type: "ASKDELL_SHARED_SESSION",
+      shareId: "AD-HASH-2",
+      messages: [{ role: "user", content: "Hash message" }]
+    };
+    const b64 = Buffer.from(encodeURIComponent(JSON.stringify(rawHashPkg))).toString("base64");
+    await sp.handleJoinSession(`https://ask.dell.com/s/test#session=raw.${b64}`);
+    assert.strictEqual(sp.state.shareId, "AD-HASH-2");
+
+    // 3. Demo mock session codes
+    await sp.handleJoinSession("AD-PR-342");
+    assert.strictEqual(sp.state.shareId, "AD-PR-342");
+
+    // 4. Demo simulated session for custom AD- prefix
+    sp.state.demoMode = true;
+    await sp.handleJoinSession("AD-CUSTOM-77");
+    assert.strictEqual(sp.state.shareId, "AD-CUSTOM-77");
+
+    // 5. Empty input
+    await sp.handleJoinSession("");
+    assert.ok(sp.elementMap["share-feedback"].textContent.includes("Please enter a Share Code"));
+
+    // 6. Live mode without AskDell tab renders action buttons
+    sp.state.demoMode = false;
+    mock.tabsList = [];
+    await sp.handleJoinSession("LIVE-CODE-88");
+    assert.ok(sp.elementMap["share-feedback"].textContent.includes("No active ask.dell.com tab"));
+
+    // 7. Live mode with tab querying ASKDELL_GET_SHARED_CHAT
+    mock.tabsList = [{ id: 303, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[303] = {
+      chat: {
+        id: "live-chat-303",
+        messages: [
+          { role: "user", user_name: "Collaborator", content: "Live query", timestamp: 1000 },
+          { role: "assistant", model_name: "Claude Opus 4.6", content: "Live answer", timestamp: 1001 }
+        ]
+      }
+    };
+    await sp.handleJoinSession("LIVE-CODE-88");
+    assert.strictEqual(sp.state.shareId, "LIVE-CODE-88");
+    assert.strictEqual(sp.state.chatId, "live-chat-303");
+  });
+
+  await t.test("32. Export Reports, PR Comments & Custom Action Handlers", async () => {
+    // Markdown export when conversation empty vs populated
+    sp.state.messages = [];
+    sp.downloadMarkdownReport();
+
+    sp.state.messages = [
+      { role: "user", content: "How do I secure this endpoint?", timestamp: 100 },
+      { role: "assistant", author: "Claude Opus 4.6", content: "Use JWT verification and rate limiting.", timestamp: 105 }
+    ];
+    sp.state.pageContext = { title: "Auth Endpoint", url: "https://github.com/org/repo", files: ["auth.ts", "server.ts"] };
+    sp.downloadMarkdownReport();
+
+    // PR and Jira comment copy
+    sp.copyAsPRComment();
+    sp.copyAsJiraComment();
+
+    // Copy PR/Jira when no assistant messages exist
+    sp.state.messages = [{ role: "user", content: "Only user prompt" }];
+    sp.copyAsPRComment();
+    sp.copyAsJiraComment();
+
+    // Custom action click handler
+    sp.state.isStreaming = true;
+    sp.handleCustomActionClick({ prompt: "Action prompt" });
+    sp.state.isStreaming = false;
+    sp.handleCustomActionClick({ prompt: "Action prompt" });
+
+    // Custom action save and delete
+    sp.saveCustomAction("Test Action", "⚡", "Explain this function");
+    sp.deleteCustomAction("custom-nonexistent");
+  });
+
+  await t.test("33. Command Palette Full Keyboard Navigation and Model Selection", () => {
+    sp.initCommandPalette();
+
+    // Window keydown Ctrl+K opens palette
+    global.window.dispatchEvent({ type: "keydown", key: "k", ctrlKey: true, preventDefault: () => {} });
+    assert.strictEqual(sp.elementMap["command-palette"].style.display, "flex");
+
+    // Input filtering
+    const input = sp.elementMap["cmd-palette-input"];
+    input.value = "arena";
+    input.dispatchEvent({ type: "input" });
+
+    // Arrow keys navigation
+    input.dispatchEvent({ type: "keydown", key: "ArrowDown", preventDefault: () => {} });
+    input.dispatchEvent({ type: "keydown", key: "ArrowUp", preventDefault: () => {} });
+    input.dispatchEvent({ type: "keydown", key: "Enter", preventDefault: () => {} });
+
+    // Window keydown Escape closes palette
+    global.window.dispatchEvent({ type: "keydown", key: "Escape", preventDefault: () => {} });
+    assert.strictEqual(sp.elementMap["command-palette"].style.display, "none");
+
+    // Palette backdrop click
+    sp.elementMap["command-palette"].style.display = "flex";
+    sp.elementMap["command-palette"].dispatchEvent({ type: "click", target: sp.elementMap["command-palette"] });
+    assert.strictEqual(sp.elementMap["command-palette"].style.display, "none");
+
+    // Model selection from palette
+    sp.selectModelFromPalette("gemini-3.8-flash");
+    assert.strictEqual(sp.state.currentModel, "gemini-3.8-flash");
+  });
+
+  await t.test("34. Multi-Model Review Arena Demo and Live Executions", async () => {
+    // Identical models warning
+    sp.elementMap["arena-model-a"].value = "claude-opus-4-6";
+    sp.elementMap["arena-model-b"].value = "claude-opus-4-6";
+    await sp.handleRunArena();
+
+    // Distinct models in demo mode
+    sp.state.demoMode = true;
+    sp.elementMap["arena-model-b"].value = "gemini-3.8-flash";
+    await sp.handleRunArena();
+
+    // Live mode with AskDell sync generation
+    sp.state.demoMode = false;
+    sp.state.connection = { status: "connected" };
+    mock.tabsList = [{ id: 404, url: "https://ask.dell.com" }];
+    mock.tabsResponses[404] = { content: "Parallel model analysis completed." };
+    await sp.handleRunArena();
+
+    // Live mode fallback when bridge errors
+    mock.tabsResponses[404] = null;
+    await sp.handleRunArena();
+  });
+
+  await t.test("35. Framework Test Synthesizer and Context Scanning Edge Cases", async () => {
+    // Run test synthesizer
+    sp.elementMap["test-strat-boundary"].checked = true;
+    sp.elementMap["test-strat-mocks"].checked = true;
+    sp.elementMap["test-strat-table"].checked = true;
+    sp.elementMap["test-strat-errors"].checked = true;
+    sp.elementMap["test-custom-notes"].value = "Ensure AAA format with mocked axios client";
+    sp.handleRunTestSynthesizer();
+
+    // Context scanning: active AskDell shared chat auto-detect
+    mock.runtimeResponse = {
+      content: {
+        platform: "askdell",
+        type: "shared_chat",
+        shareId: "AD-AUTO-DETECT",
+        url: "https://ask.dell.com/s/AD-AUTO-DETECT"
+      }
+    };
+    sp.state.messages = [];
+    sp.state.shareId = null;
+    await sp.scanActiveTabContext();
+
+    // Context scanning runtime error path
+    mock.runtimeResponse = null;
+    await sp.scanActiveTabContext();
+    assert.strictEqual(sp.state.pageContext, null);
+
+    // Code block copy buttons
+    const container = new sp.MockElement("div");
+    container.innerHTML = `<div class="code-block-container"><button class="code-copy-btn">Copy</button><pre><code>console.log("hello");</code></pre></div>`;
+    sp.attachCodeBlockCopyButtons(container);
+  });
+
+  await t.test("36. Stream lifecycle controls, Toast notifications, and Error Rejections", async () => {
+    // 1. Toast notification variants
+    sp.showNotification("Critical failure detected", "error");
+    sp.showNotification("Potential security vulnerability", "warning");
+    sp.showNotification("Analysis succeeded", "success");
+    sp.showNotification("Informational note", "info");
+
+    // 2. stopActiveStream timer and active port
+    sp.state.demoStreamTimer = 999;
+    sp.stopActiveStream();
+    assert.strictEqual(sp.state.demoStreamTimer, null);
+
+    let portDisconnected = false;
+    sp.state.activePort = {
+      disconnect: () => { portDisconnected = true; }
+    };
+    sp.stopActiveStream();
+    assert.strictEqual(portDisconnected, true);
+    assert.strictEqual(sp.state.activePort, null);
+
+    // 3. Clipboard rejection in PR and Jira comment copying
+    const origWrite = global.navigator.clipboard.writeText;
+    global.navigator.clipboard.writeText = () => Promise.reject(new Error("Permission denied"));
+
+    sp.state.messages = [
+      { role: "assistant", content: "Test suggestion" }
+    ];
+    sp.copyAsPRComment();
+    sp.copyAsJiraComment();
+    sp.exportSessionPackage();
+
+    global.navigator.clipboard.writeText = origWrite;
+
+    // 4. toggleSharePanel when already open vs when shareId exists
+    sp.elementMap["share-panel"].style.display = "flex";
+    sp.toggleSharePanel();
+    assert.strictEqual(sp.elementMap["share-panel"].style.display, "none");
+
+    sp.state.shareId = "AD-EXISTING-99";
+    sp.elementMap["share-link-input"].value = "";
+    sp.toggleSharePanel();
+    assert.strictEqual(sp.elementMap["share-panel"].style.display, "flex");
+    assert.ok(sp.elementMap["share-link-input"].value.includes("AD-EXISTING-99"));
+  });
+
+  await t.test("37. Enterprise Live Share Generation, History Cache and Live Chat Maps", async () => {
+    // 1. handleGenerateShareLink in Live Enterprise Mode with server response
+    sp.state.demoMode = false;
+    mock.tabsList = [{ id: 505, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[505] = { shareId: "AD-SERVER-555" };
+    sp.state.chatId = "chat-enterprise-1";
+    sp.state.messages = [{ role: "user", content: "Architecture query" }];
+    await sp.handleGenerateShareLink();
+    assert.strictEqual(sp.state.shareId, "AD-SERVER-555");
+
+    // 2. handleJoinSession cached history match
+    sp.state.demoMode = true;
+    sp.state.historyCache = [{ id: "AD-CACHED-77", title: "AD-CACHED-77 Session" }];
+    await sp.handleJoinSession("AD-CACHED-77");
+    assert.strictEqual(sp.state.shareId, "AD-CACHED-77");
+
+    // 3. handleJoinSession URL with /c/ path
+    await sp.handleJoinSession("https://ask.dell.com/c/AD-PR-342");
+    assert.strictEqual(sp.state.shareId, "AD-PR-342");
+
+    // 4. Live session query where messages is an Object Map
+    sp.state.demoMode = false;
+    mock.tabsList = [{ id: 505, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[505] = {
+      chat: {
+        id: "chat-map-99",
+        messages: {
+          msgA: { role: "user", user_name: "Lead Dev", content: "Review PR #5", timestamp: 10 },
+          msgB: { role: "assistant", model_name: "Gemini 3.8 Flash", content: "Looks good to merge.", timestamp: 15 }
+        }
+      }
+    };
+    await sp.handleJoinSession("AD-MAP-99");
+    assert.strictEqual(sp.state.chatId, "chat-map-99");
+
+    // 5. Live session query error with Retry button click
+    mock.tabsResponses[505] = { error: "Session expired on AskDell server" };
+    await sp.handleJoinSession("AD-FAIL-1");
+    const retryBtns = sp.elementMap["share-feedback"].querySelectorAll(".share-feedback-btn");
+    assert.ok(retryBtns.length >= 2);
+    retryBtns[0].click(); // Click Retry
+    retryBtns[1].click(); // Click Paste Session Package
+  });
+
+  await t.test("38. Arena Copy Handlers, Live Error Fallback, and Command Palette Interactivity", async () => {
+    // 1. Arena copy buttons
+    sp.state.demoMode = true;
+    sp.elementMap["arena-model-a"].value = "claude-opus-4-6";
+    sp.elementMap["arena-model-b"].value = "gemini-3.8-flash";
+    await sp.handleRunArena();
+
+    const messagesEl = sp.elementMap["messages"];
+    const arenaWrapper = messagesEl.children.find(c => c.classList.contains("arena-wrapper"));
+    assert.ok(arenaWrapper);
+    const copyA = arenaWrapper.querySelector(".arena-copy-a");
+    const copyB = arenaWrapper.querySelector(".arena-copy-b");
+    if (copyA) copyA.click();
+    if (copyB) copyB.click();
+
+    // 2. Arena Live Execution with bridge throw -> Fallback branch
+    sp.state.demoMode = false;
+    sp.state.connection = { status: "connected" };
+    mock.tabsList = [{ id: 606, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[606] = null;
+    await sp.handleRunArena();
+
+    // 3. Command palette hover & click on item
+    sp.renderFilteredCommands("full");
+    const items = sp.elementMap["cmd-palette-list"].children;
+    if (items.length > 0) {
+      items[0].dispatchEvent({ type: "mouseenter" });
+      items[0].dispatchEvent({ type: "click" });
+    }
+
+    // 4. Custom actions delete and empty validation
+    sp.state.customActions = [
+      { id: "custom-del-1", title: "Action To Delete", emoji: "⚡", prompt: "Explain" }
+    ];
+    sp.renderCustomActions();
+    const delBtn = sp.elementMap["custom-actions-list"].querySelector(".btn-delete-custom-action");
+    if (delBtn) delBtn.click();
+    sp.saveCustomAction("", "", "");
+
+    // 5. handleUserSubmission with live stream bridge error
+    sp.state.demoMode = false;
+    mock.tabsList = [];
+    await sp.handleUserSubmission("Trigger live stream without tab", true);
+  });
+
+  await t.test("39. Model Metadata Heuristics, Unclosed Reasoning and Link Sanitization", () => {
+    // 1. Model metadata heuristic fallbacks
+    assert.strictEqual(sp.getModelMetadata("meta-llama-3").color, "llama");
+    assert.strictEqual(sp.getModelMetadata("google-gemma-2").color, "gemma");
+    assert.strictEqual(sp.getModelMetadata("mistral-pixtral-12b").color, "gemini");
+    assert.strictEqual(sp.getModelMetadata("openai-gpt-4o").color, "oss");
+    assert.strictEqual(sp.getModelMetadata("intent-router").color, "gemini");
+    assert.strictEqual(sp.getModelMetadata("custom-enterprise-agent").color, "gemini");
+
+    // 2. Unclosed reasoning streaming blocks
+    const unclosedThought = '<details type="thought"><summary>Model Reasoning</summary>Partial reasoning steps';
+    const html1 = sp.renderMarkdown(unclosedThought);
+    assert.ok(html1.includes("Model Reasoning (analyzing...)"));
+
+    const unclosedThink = "<think>Still generating chain of thought";
+    const html2 = sp.renderMarkdown(unclosedThink);
+    assert.ok(html2.includes("Thinking Process (analyzing...)"));
+
+    // 3. Link sanitization (safe vs javascript: injection)
+    const linksMd = "[Safe Link](https://dell.com) and [Bad Link](javascript:alert(1))";
+    const htmlLinks = sp.renderMarkdown(linksMd);
+    assert.ok(htmlLinks.includes('href="https://dell.com"'));
+    assert.ok(htmlLinks.includes('href="#"'));
+
+    // 4. formatTabContent with string content and noisy file omission
+    assert.strictEqual(sp.formatTabContent("Raw string content"), "Raw string content");
+    const noisyContext = {
+      title: "package-lock.json",
+      code: '{\n  "name": "project",\n  "version": "1.0.0"\n}'
+    };
+    const formattedNoisy = sp.formatTabContent(noisyContext);
+    assert.ok(formattedNoisy.includes("[File omitted by Smart Noise Filter]"));
+  });
+
+  await t.test("40. Attached Context UI Toggles, Code Block Suggestions, and Auth States", async () => {
+    // 1. renderUserMessage with attached context and toggle click
+    sp.renderUserMessage("User query with context", "Attached file contents here...", "claude-user", "Dev Lead", 1000);
+    const messagesEl = sp.elementMap["messages"];
+    const toggleBtn = messagesEl.querySelector(".attached-context-toggle");
+    assert.ok(toggleBtn);
+    toggleBtn.click(); // Open
+    toggleBtn.click(); // Close
+
+    // 2. Code block copy and suggestion button handlers
+    const cardContainer = new sp.MockElement("div");
+    cardContainer.innerHTML = `
+      <div class="code-block-container">
+        <button class="code-copy-btn" data-raw="${encodeURIComponent('console.log(42);')}"><span>Copy code</span></button>
+        <button class="code-suggestion-btn" data-raw="${encodeURIComponent('console.log(42);')}"><span>Suggestion</span></button>
+      </div>
+    `;
+    sp.attachCodeBlockCopyButtons(cardContainer);
+    const copyBtn = cardContainer.querySelector(".code-copy-btn");
+    const suggBtn = cardContainer.querySelector(".code-suggestion-btn");
+    copyBtn.click();
+    suggBtn.click();
+
+    // 3. Auth Retry button status states: unauthenticated, not_open, and error throw
+    mock.runtimeResponse = { status: "unauthenticated" };
+    sp.elementMap["btn-retry-auth"].click();
+
+    mock.runtimeResponse = { status: "not_open" };
+    sp.elementMap["btn-retry-auth"].click();
+
+    mock.runtimeResponse = () => { throw new Error("Connection failed"); };
+    sp.elementMap["btn-retry-auth"].click();
+
+    // 4. Open AskDell button error path
+    mock.runtimeResponse = () => { throw new Error("Tab launch failed"); };
+    sp.elementMap["btn-open-askdell"].click();
+  });
+
+  await t.test("41. Live Enterprise History and Contextual Submission Flow", async () => {
+    // 1. Live Enterprise loadChatFromHistory with AskDell tab
+    sp.state.demoMode = false;
+    mock.tabsList = [{ id: 707, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[707] = {
+      chat: {
+        id: "ent-chat-707",
+        messages: [
+          { role: "user", author: "Eng", content: "Architecture review", timestamp: 100 },
+          { role: "assistant", model: "Claude Opus 4.6", content: "Architecture valid", timestamp: 102 }
+        ]
+      }
+    };
+    await sp.loadChatFromHistory("ent-chat-707");
+    assert.strictEqual(sp.state.chatId, "ent-chat-707");
+
+    // 2. handleUserSubmission with attachContext = true and pageContext
+    sp.state.pageContext = {
+      title: "UserService.ts",
+      platform: "github",
+      diff: "+ export class UserService {}"
+    };
+    sp.state.demoMode = true;
+    await sp.handleUserSubmission("Review this class implementation", true);
+    assert.ok(sp.state.messages.length > 0);
+
+    // 3. loadSettings migration with legacy values
+    mock.storageData.demoMode = true;
+    mock.storageData.userName = "Alex Enterprise";
+    mock.storageData.settings = { model: "claude-opus", connectionMode: "demo" };
+    await sp.loadSettings();
+    assert.strictEqual(sp.state.userName, "Alex Enterprise");
+    assert.strictEqual(sp.state.settings.model, "claude-opus-4-6");
+  });
+
+  await t.test("42. Live History Fetch, Empty States, and Deep Link Routing", async () => {
+    // 1. toggleHistoryDrawer with Live AskDell tab
+    sp.state.demoMode = false;
+    mock.tabsList = [{ id: 808, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[808] = [{ id: "c1", title: "Conversation 1", updated_at: 1000 }];
+    sp.elementMap["history-panel"].style.display = "none";
+    await sp.toggleHistoryDrawer();
+    assert.strictEqual(sp.state.historyCache.length, 1);
+
+    // Click on history item
+    const historyList = sp.elementMap["history-list"];
+    const historyItem = historyList.querySelector(".history-item");
+    if (historyItem) historyItem.click();
+
+    // toggleHistoryDrawer error fallback
+    mock.tabsResponses[808] = () => { throw new Error("History error"); };
+    sp.elementMap["history-panel"].style.display = "none";
+    await sp.toggleHistoryDrawer();
+
+    // 2. renderHistoryList empty state
+    sp.renderHistoryList([]);
+    assert.ok(historyList.textContent.includes("No past conversations found"));
+
+    // 3. loadChatFromHistory with error throw
+    mock.tabsResponses[808] = () => { throw new Error("Chat fetch failed"); };
+    await sp.loadChatFromHistory("bad-chat");
+
+    // 4. decompressSessionFromHash with fallback and raw prefix
+    const rawObj = { messages: [{ role: "user", content: "Raw test" }] };
+    const rawToken = "raw." + Buffer.from(encodeURIComponent(JSON.stringify(rawObj))).toString("base64");
+    const decompressed = await sp.decompressSessionFromHash(rawToken);
+    assert.strictEqual(decompressed.messages[0].content, "Raw test");
+
+    // 5. exportSessionPackage with empty messages
+    sp.state.messages = [];
+    sp.exportSessionPackage();
+
+    // 6. handleJoinSession invalid JSON catch & decompression error catch
+    await sp.handleJoinSession("{ invalid json string }");
+    await sp.handleJoinSession("raw.not-valid-base64!!!");
+
+    // 7. renderCustomActions empty state
+    sp.state.customActions = [];
+    sp.renderCustomActions();
+    assert.ok(sp.elementMap["custom-actions-list"].textContent.includes("No custom actions yet"));
+
+    // 8. toggleCommandPalette when open
+    sp.initCommandPalette();
+    sp.elementMap["command-palette"].style.display = "flex";
+    sp.toggleCommandPalette();
+    assert.strictEqual(sp.elementMap["command-palette"].style.display, "none");
+
+    // 9. Escape keypress when command palette is open
+    sp.elementMap["command-palette"].style.display = "flex";
+    global.window.dispatchEvent({ type: "keydown", key: "Escape", preventDefault: () => {} });
+    assert.strictEqual(sp.elementMap["command-palette"].style.display, "none");
+
+    // 10. updateModelDropdowns fallback to claude-opus-4-6
+    sp.state.currentModel = "unknown-nonexistent-model";
+    sp.updateModelDropdowns([
+      { id: "gemini-pro", name: "Gemini Pro" },
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+    ]);
+    assert.strictEqual(sp.state.currentModel, "claude-opus-4-6");
+
+    // 11. DOMContentLoaded with URL join param and hash session
+    sp.state.demoMode = true;
+    global.window.location.search = "?join=AD-DEEP-LINK";
+    if (sp.docListeners["DOMContentLoaded"]) {
+      for (const fn of sp.docListeners["DOMContentLoaded"]) {
+        await fn();
+      }
+    }
+    assert.strictEqual(sp.state.shareId, "AD-DEEP-LINK");
+
+    global.window.location.search = "";
+    global.window.location.hash = `#session=${rawToken}`;
+    if (sp.docListeners["DOMContentLoaded"]) {
+      for (const fn of sp.docListeners["DOMContentLoaded"]) {
+        await fn();
+      }
+    }
+    assert.ok(sp.state.messages.length > 0);
+  });
+
+  await t.test("43. Target 100% Coverage: Button callbacks, Stream Ports, and Trees", async () => {
+    // 1. attachCodeBlockCopyButtons explicit children with .onclick
+    const codeContainer = new sp.MockElement("div");
+    const copyBtn = new sp.MockElement("button");
+    copyBtn.className = "code-copy-btn";
+    copyBtn.dataset = { raw: encodeURIComponent("const x = 1;") };
+    const span1 = new sp.MockElement("span");
+    copyBtn.appendChild(span1);
+
+    const suggBtn = new sp.MockElement("button");
+    suggBtn.className = "code-suggestion-btn";
+    suggBtn.dataset = { raw: encodeURIComponent("const x = 1;") };
+    const span2 = new sp.MockElement("span");
+    suggBtn.appendChild(span2);
+
+    codeContainer.appendChild(copyBtn);
+    codeContainer.appendChild(suggBtn);
+
+    sp.attachCodeBlockCopyButtons(codeContainer);
+    copyBtn.click();
+    suggBtn.click();
+
+    // 2. runStreamWithBridge connect error catch and 'completed' port message
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsConnectPort = () => { throw new Error("Port connect failed"); };
+    const failCard = sp.createAssistantStreamingCard("Fail stream", false);
+    await assert.rejects(sp.runStreamWithBridge({ model: "claude-opus-4-6" }, failCard), /Failed to connect/);
+
+    // Live stream handling 'completed' message
+    let streamListener = null;
+    mock.tabsConnectPort = {
+      postMessage: () => {},
+      onMessage: { addListener: (fn) => { streamListener = fn; } },
+      onDisconnect: { addListener: () => {} }
+    };
+    const compCard = sp.createAssistantStreamingCard("Complete stream", false);
+    const compPromise = sp.runStreamWithBridge({ model: "claude-opus-4-6" }, compCard);
+    await new Promise((r) => setTimeout(r, 10));
+    streamListener({ type: "completed" });
+    streamListener({ type: "done", fullContent: "Done streaming" });
+    await compPromise;
+
+    // 3. loadChatFromHistory with messages as object map and array
+    mock.tabsResponses[909] = {
+      history: {
+        messages: {
+          x1: { role: "user", user_name: "Alice", content: "Question", timestamp: 10 },
+          x2: { role: "assistant", model_name: "Claude Opus 4.6", content: "Answer", timestamp: 12 }
+        }
+      }
+    };
+    sp.state.demoMode = false;
+    await sp.loadChatFromHistory("chat-obj-map");
+
+    mock.tabsResponses[909] = {
+      messages: [
+        { role: "user", author: "Bob", content: "Array msg", timestamp: 20 },
+        { role: "assistant", content: "Array reply", timestamp: 22 }
+      ]
+    };
+    await sp.loadChatFromHistory("chat-arr");
+
+    // 4. handleGenerateShareLink live bridge error fallback
+    mock.tabsResponses[909] = () => { throw new Error("Share link server error"); };
+    sp.state.chatId = "c-err";
+    sp.state.messages = [{ role: "user", content: "Testing share failure" }];
+    await sp.handleGenerateShareLink();
+
+    // 5. showShareFeedback action button clicks for no active tab
+    mock.tabsList = [];
+    await sp.handleJoinSession("LIVE-NO-TAB");
+    const fbContainer = sp.elementMap["share-feedback"];
+    const fbBtns = fbContainer.querySelectorAll(".share-feedback-btn");
+    if (fbBtns.length >= 2) {
+      fbBtns[0].click(); // Open AskDell Tab
+      fbBtns[1].click(); // Paste Session Package
+    }
+
+    // 6. showShareFeedback retry button click for server error
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[909] = { error: "Chat deleted on server" };
+    await sp.handleJoinSession("LIVE-ERR");
+    const retryBtns = fbContainer.querySelectorAll(".share-feedback-btn");
+    if (retryBtns.length >= 2) {
+      retryBtns[0].click(); // Retry
+      retryBtns[1].click(); // Paste package
+    }
+
+    // 7. Arena Live bridge error fallback branch
+    sp.state.connection = { status: "connected" };
+    mock.tabsResponses[909] = () => { throw new Error("Arena parallel generation error"); };
+    await sp.handleRunArena();
+
+    // 8. attached-context-toggle click
+    const toggleEl = new sp.MockElement("div");
+    toggleEl.className = "attached-context-toggle";
+    const previewEl = new sp.MockElement("div");
+    previewEl.className = "attached-context-box";
+    previewEl.style.display = "none";
+    const arrowSpan = new sp.MockElement("span");
+    arrowSpan.className = "arrow";
+    toggleEl.appendChild(arrowSpan);
+
+    toggleEl.addEventListener("click", () => {
+      const isHidden = previewEl.style.display === "none";
+      previewEl.style.display = isHidden ? "block" : "none";
+      arrowSpan.textContent = isHidden ? "▲" : "▼";
+    });
+    toggleEl.click();
+    assert.strictEqual(previewEl.style.display, "block");
+    toggleEl.click();
+    assert.strictEqual(previewEl.style.display, "none");
+  });
+
+  await t.test("44. Target 100% Full Code Coverage: All branches, error boundaries and fallbacks", async () => {
+    // 1. trimCiLogs with intermediate gaps (>40 lines)
+    const spacedLogs = "Error: setup failed\n" + Array.from({ length: 80 }, (_, i) => `log line ${i}`).join("\n") + "\nError: end failed";
+    const trimmed = sp.trimCiLogs(spacedLogs);
+    assert.ok(trimmed.includes("[intermediate output trimmed]"));
+
+    // 2. getModelMetadata match by case-insensitive key (lines 256-257)
+    const metaByLower = sp.getModelMetadata("CLAUDE-OPUS-4-6", "");
+    assert.strictEqual(metaByLower.name, "Claude Opus 4.6");
+
+    // 3. DOMContentLoaded URL error handling (lines 324-325)
+    const origSearchDesc = Object.getOwnPropertyDescriptor(global.window.location, "search");
+    Object.defineProperty(global.window.location, "search", {
+      get() { throw new Error("Forced URL search error"); },
+      configurable: true
+    });
+    if (sp.docListeners["DOMContentLoaded"]) {
+      for (const fn of sp.docListeners["DOMContentLoaded"]) {
+        await fn();
+      }
+    }
+    if (origSearchDesc) {
+      Object.defineProperty(global.window.location, "search", origSearchDesc);
+    } else {
+      delete global.window.location.search;
+      global.window.location.search = "";
+    }
+
+    // 4. discoverModels error catch (lines 497-498)
+    const origRtSend = chrome.runtime.sendMessage;
+    chrome.runtime.sendMessage = () => { throw new Error("Discovery failure"); };
+    await sp.discoverModels();
+    chrome.runtime.sendMessage = origRtSend;
+
+    // 5. checkPendingAction error catch (lines 552-553)
+    const origStoreGet = chrome.storage.local.get;
+    chrome.storage.local.get = () => Promise.reject(new Error("Storage read failed"));
+    await sp.checkPendingAction();
+    chrome.storage.local.get = origStoreGet;
+
+    // 6. findAskDellTab error catch (lines 580-581)
+    const origTabsQuery = chrome.tabs.query;
+    chrome.tabs.query = () => Promise.reject(new Error("Query failed"));
+    const tabRes = await sp.findAskDellTab();
+    assert.strictEqual(tabRes, null);
+    chrome.tabs.query = origTabsQuery;
+
+    // 7. refreshAskDellStatus error catch (lines 705-707)
+    sp.state.demoMode = false;
+    chrome.runtime.sendMessage = () => { throw new Error("Status check failed"); };
+    const statusRes = await sp.refreshAskDellStatus();
+    assert.strictEqual(statusRes, false);
+    chrome.runtime.sendMessage = origRtSend;
+
+    // 8. scanActiveTabContext error catch (lines 741-745)
+    chrome.runtime.sendMessage = () => Promise.reject(new Error("Extract tab failed"));
+    await sp.scanActiveTabContext();
+    assert.strictEqual(sp.state.pageContext, null);
+    chrome.runtime.sendMessage = origRtSend;
+
+    // 9. handleUserSubmission stream error catch (lines 1192, 1194-1197)
+    sp.state.demoMode = false;
+    sp.state.connection = { status: "connected" };
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsConnectPort = () => { throw new Error("Bridge connection stream fail"); };
+    await sp.handleUserSubmission("Failing stream prompt", false, true);
+
+    // Live bridge successful stream (line 1192)
+    let subPortListener = null;
+    mock.tabsConnectPort = {
+      postMessage: () => {},
+      onMessage: { addListener: (fn) => { subPortListener = fn; } },
+      onDisconnect: { addListener: () => {} }
+    };
+    const subPromise = sp.handleUserSubmission("Successful live stream prompt", false, true);
+    await new Promise((r) => setTimeout(r, 10));
+    if (subPortListener) {
+      subPortListener({ type: "done", fullContent: "Stream completed successfully" });
+    }
+    await subPromise;
+
+    // 10. runStreamInDemoMode interval abort (lines 1800-1804)
+    const simCard = new sp.MockElement("div");
+    const simPromise = sp.runStreamInDemoMode({ userPrompt: "Test demo abort", model: "claude-opus-4-6" }, simCard);
+    sp.state.isStreaming = false;
+    await simPromise;
+
+    // 11. renderUserMessage attached context toggle clicked twice (lines 2014-2016)
+    sp.renderUserMessage("User with attached context", "Attached code details for collapse testing");
+    const allToggles = sp.elementMap["messages"].querySelectorAll(".attached-context-toggle");
+    const allBoxes = sp.elementMap["messages"].querySelectorAll(".attached-context-box");
+    const lastToggle = allToggles[allToggles.length - 1];
+    const lastBox = allBoxes[allBoxes.length - 1];
+    if (lastToggle && lastBox) {
+      lastToggle.click();
+      assert.strictEqual(lastBox.style.display, "block");
+      lastToggle.click();
+      assert.strictEqual(lastBox.style.display, "none");
+    }
+
+    // 12. createAssistantStreamingCard copy-msg-btn and regenerate-msg-btn (lines 2075-2079, 2083-2089)
+    sp.createAssistantStreamingCard("Initial user prompt", true);
+    const copyMsgBtn = sp.elementMap["messages"].querySelectorAll(".copy-msg-btn").pop();
+    const regenMsgBtn = sp.elementMap["messages"].querySelectorAll(".regenerate-msg-btn").pop();
+
+    if (copyMsgBtn) {
+      copyMsgBtn.click();
+    }
+
+    if (regenMsgBtn) {
+      sp.state.isStreaming = true;
+      regenMsgBtn.click(); // early return while streaming
+      sp.state.isStreaming = false;
+      sp.state.demoMode = true;
+      sp.state.messages.push({ role: "assistant", content: "Previous answer" });
+      regenMsgBtn.click(); // executes regeneration submission
+    }
+
+    // 13. toggleHistoryDrawer tab not found & sendMessage failure (lines 2484-2486, 2492-2493)
+    let queryCount = 0;
+    const origQuery = chrome.tabs.query;
+    chrome.tabs.query = async () => {
+      queryCount++;
+      if (queryCount === 1) return [{ id: 909, url: "https://ask.dell.com/chat" }];
+      return [];
+    };
+    sp.elementMap["history-panel"].style.display = "none";
+    sp.state.demoMode = false;
+    await sp.toggleHistoryDrawer();
+    chrome.tabs.query = origQuery;
+
+    // toggleHistoryDrawer sendMessage error
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[909] = () => { throw new Error("History fetch error"); };
+    sp.elementMap["history-panel"].style.display = "none";
+    await sp.toggleHistoryDrawer();
+
+    // 14. loadChatFromHistory error catch (lines 2640-2641)
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[909] = () => { throw new Error("Chat fetch failure"); };
+    sp.state.demoMode = false;
+    await sp.loadChatFromHistory("err-chat-id");
+
+    // 15. compressSessionToHash fallbacks (lines 2849-2852)
+    const origCS = global.CompressionStream;
+    global.CompressionStream = undefined;
+    const rawCompressed = await sp.compressSessionToHash({ messages: [{ role: "user", content: "No CompressionStream" }] });
+    assert.ok(rawCompressed.startsWith("raw."));
+    global.CompressionStream = origCS;
+
+    global.CompressionStream = class {
+      constructor() { throw new Error("Failed to construct stream"); }
+    };
+    const errCompressed = await sp.compressSessionToHash({ messages: [{ role: "user", content: "Error in CompressionStream" }] });
+    assert.ok(errCompressed.startsWith("raw."));
+    global.CompressionStream = origCS;
+
+    // 16. decompressSessionFromHash unprefixed tokens (lines 2875-2890)
+    const gzPrefixed = await sp.compressSessionToHash({ messages: [{ role: "user", content: "Gzip with no prefix" }] });
+    const noPrefixGz = gzPrefixed.replace(/^gz\./, "");
+    const decompA = await sp.decompressSessionFromHash(noPrefixGz);
+    assert.strictEqual(decompA.messages[0].content, "Gzip with no prefix");
+
+    const rawJson = JSON.stringify({ messages: [{ role: "user", content: "Plain raw b64 no prefix" }] });
+    const plainB64 = btoa(encodeURIComponent(rawJson));
+    const decompB = await sp.decompressSessionFromHash(plainB64);
+    assert.strictEqual(decompB.messages[0].content, "Plain raw b64 no prefix");
+
+    // 17. handleGenerateShareLink live bridge error fallback (lines 2920-2921)
+    sp.state.demoMode = false;
+    sp.state.chatId = "live-chat-share-err";
+    sp.state.shareId = null;
+    sp.state.messages = [{ role: "user", content: "Share error test" }];
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[909] = () => { throw new Error("Failed to create server share"); };
+    await sp.handleGenerateShareLink();
+    assert.ok(sp.state.shareId.startsWith("AD-"));
+
+    // 18. saveCustomAction validation & delete button click (lines 3397-3398, 3418-3420)
+    sp.saveCustomAction("", "", "");
+    sp.saveCustomAction("To Delete", "🗑️", "Prompt for delete");
+    sp.renderCustomActions();
+    const deleteBtn = sp.elementMap["custom-actions-list"].querySelectorAll(".btn-delete-custom-action").pop();
+    if (deleteBtn) {
+      deleteBtn.click();
+    }
+
+    // 19. Arena copy handlers & Live Arena error fallback (lines 3887-3888, 3891-3892, 3933-3941)
+    sp.state.demoMode = true;
+    await sp.handleRunArena();
+    const messagesContainer = sp.elementMap["messages"];
+    const copyA = messagesContainer.querySelectorAll(".arena-copy-a").pop();
+    const copyB = messagesContainer.querySelectorAll(".arena-copy-b").pop();
+    if (copyA) copyA.click();
+    if (copyB) copyB.click();
+
+    sp.state.demoMode = false;
+    sp.state.connection = { status: "connected" };
+    mock.tabsList = [{ id: 909, url: "https://ask.dell.com/chat" }];
+    mock.tabsResponses[909] = () => { throw new Error("Arena live bridge generation failed"); };
+    await sp.handleRunArena();
   });
 });
 

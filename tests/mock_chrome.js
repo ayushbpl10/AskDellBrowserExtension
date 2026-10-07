@@ -17,6 +17,8 @@ class MockChrome {
     this.tabRemovedListeners = [];
     this.actionClickListeners = [];
     this.lastError = null;
+    this.tabsResponses = {};
+    this.tabsConnectPort = null;
 
     this.runtime = {
       onMessage: {
@@ -30,6 +32,12 @@ class MockChrome {
         addListener: (fn) => this.installedListeners.push(fn)
       },
       sendMessage: (msg, callback) => {
+        if (this.runtimeResponse !== undefined) {
+          const resp = typeof this.runtimeResponse === "function" ? this.runtimeResponse(msg) : this.runtimeResponse;
+          if (callback) callback(resp);
+          return Promise.resolve(resp);
+        }
+
         let responded = false;
         let responseValue = undefined;
 
@@ -95,12 +103,35 @@ class MockChrome {
         if (callback) callback(tab);
         return Promise.resolve(tab);
       },
+      connect: (tabId, connectInfo) => {
+        if (typeof this.tabsConnectPort === "function") {
+          return this.tabsConnectPort(tabId, connectInfo);
+        }
+        if (this.tabsConnectPort) return this.tabsConnectPort;
+        return {
+          name: connectInfo?.name || "",
+          postMessage: () => {},
+          onMessage: { addListener: () => {} },
+          onDisconnect: { addListener: () => {} },
+          disconnect: () => {}
+        };
+      },
       sendMessage: (tabId, msg, callback) => {
         const tab = this.tabsList.find((t) => t.id === tabId);
         if (!tab) {
           const err = new Error(`Could not establish connection to tab ${tabId}`);
           if (callback) callback({ error: err.message });
           return Promise.reject(err);
+        }
+        if (this.tabsResponses && this.tabsResponses[tabId] !== undefined) {
+          try {
+            const raw = this.tabsResponses[tabId];
+            const resp = typeof raw === "function" ? raw(msg) : raw;
+            if (callback) callback(resp);
+            return Promise.resolve(resp);
+          } catch (err) {
+            return Promise.reject(err);
+          }
         }
         if (tab.messageHandler) {
           const p = Promise.resolve(tab.messageHandler(msg));
