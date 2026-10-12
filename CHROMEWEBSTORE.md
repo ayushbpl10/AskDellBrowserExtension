@@ -1,10 +1,10 @@
-# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.2.2
+# Chrome Web Store Developer Console Guide — AskDell Dev Assistant v2.3.0
 
 > **Status**: Ready for Resubmission  
 > **Item ID**: `emfpgabhdjmfbmfcdnkflcgkcchejfik`  
-> **Package Version**: `2.2.2` (Manifest V3)  
-> **Package File**: `dist/AskDell-Dev-Assistant-v2.2.2.zip`  
-> **Last Updated**: 2026-10-05
+> **Package Version**: `2.3.0` (Manifest V3)  
+> **Package File**: `dist/AskDell-Dev-Assistant-v2.3.0.zip`  
+> **Last Updated**: 2026-10-09
 
 ---
 
@@ -145,12 +145,12 @@ Google reviewers require a specific, plain-English justification for every decla
 
 ## 3. Test Instructions Tab (`/testcredentials`)
 
-Google and Microsoft store reviewers test your extension. Because `ask.dell.com` is Dell's internal corporate portal requiring Dell VPN/SSO, version 2.2.1 includes a full-fidelity **Reviewer Demo Mode** to allow testing of all features:
+Google and Microsoft store reviewers test your extension. Because `ask.dell.com` is Dell's internal corporate portal requiring Dell VPN/SSO, version 2.3.0 includes a full-fidelity **Reviewer Demo Mode** to allow testing of all features:
 
 ```text
 NOTE FOR REVIEW TEAM:
 AskDell Dev Assistant is an enterprise developer assistant designed for engineers using Dell's internal AI portal (ask.dell.com).
-Because ask.dell.com is hosted on Dell Technologies' corporate intranet (accessible via Dell corporate VPN), version 2.2.1 includes a dedicated "Reviewer Demo Mode" so the store review team can thoroughly test all primary functions:
+Because ask.dell.com is hosted on Dell Technologies' corporate intranet (accessible via Dell corporate VPN), version 2.3.0 includes a dedicated "Reviewer Demo Mode" so the store review team can thoroughly test all primary functions:
 
 1. Open any public GitHub pull request or code page (e.g., https://github.com/microsoft/vscode or any active tab).
 2. Click the extension icon in the toolbar to open the Side Panel.

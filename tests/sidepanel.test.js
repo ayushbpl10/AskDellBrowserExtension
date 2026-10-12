@@ -571,7 +571,7 @@ test("Sidepanel Module Suite", async (t) => {
   await t.test("9. Session Sharing: compressSessionToHash and decompressSessionFromHash", async () => {
     const pkg = {
       type: "ASKDELL_SHARED_SESSION",
-      version: "2.2.2",
+      version: "2.3.0",
       shareId: "AD-TEST-99",
       title: "Shared Test",
       messages: [{ role: "user", content: "Test question" }]
@@ -593,7 +593,7 @@ test("Sidepanel Module Suite", async (t) => {
 
     const pkg = {
       type: "ASKDELL_SHARED_SESSION",
-      version: "2.2.2",
+      version: "2.3.0",
       shareId: "AD-PR-404",
       title: "PR Architecture Review",
       messages: [
@@ -1348,7 +1348,7 @@ test("Sidepanel Module Suite", async (t) => {
     // 1. Direct JSON Session Package
     const jsonPackage = JSON.stringify({
       type: "ASKDELL_SHARED_SESSION",
-      version: "2.2.2",
+      version: "2.3.0",
       shareId: "AD-JSON-1",
       messages: [{ role: "user", content: "Direct JSON message" }]
     });

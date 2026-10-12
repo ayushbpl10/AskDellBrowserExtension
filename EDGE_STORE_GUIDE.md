@@ -14,11 +14,11 @@
 
 ---
 
-## 📋 Pre-Packaged Submission File (Version 2.2.1)
+## 📋 Pre-Packaged Submission File (Version 2.3.0)
 
 Your production package is ready and built at:
 ```
-F:\AskDellBrowserExtension\dist\AskDell-Dev-Assistant-v2.2.1.zip
+F:\AskDellBrowserExtension\dist\AskDell-Dev-Assistant-v2.3.0.zip
 ```
 *(Clean Manifest V3 package with built-in Reviewer Demo Mode, excluding batch files and temporary data).*
 
@@ -41,12 +41,12 @@ Version 2.2.0 introduces **Reviewer Demo Mode**:
 1. Navigate to: **[Microsoft Partner Center — AskDell Dev Assistant](https://partner.microsoft.com/en-us/dashboard/microsoftedge/ab9e31a4-83a7-4f6e-a430-413a8ec0668b/packages/dashboard)**.
 2. Click **"Update"** or edit the current submission package.
 
-### Step 2: Upload Version 2.2.1 Package
+### Step 2: Upload Version 2.3.0 Package
 1. Drag and drop the clean zip file:
    ```
-   F:\AskDellBrowserExtension\dist\AskDell-Dev-Assistant-v2.2.1.zip
+   F:\AskDellBrowserExtension\dist\AskDell-Dev-Assistant-v2.3.0.zip
    ```
-2. Wait for automatic validation of `manifest.json` (version `2.2.1`).
+2. Wait for automatic validation of `manifest.json` (version `2.3.0`).
 
 ---
 
@@ -60,7 +60,7 @@ CERTIFICATION NOTES FOR MICROSOFT EDGE REVIEW TEAM
 ==================================================================
 Product: AskDell Dev Assistant
 Product ID: ab9e31a4-83a7-4f6e-a430-413a8ec0668b
-Package Version: 2.2.1
+Package Version: 2.3.0
 
 Dear Microsoft Edge Add-ons Review Team,
 
@@ -72,7 +72,7 @@ Thank you for your review feedback regarding Technical Requirement Policy 1.1.3.
    - External reviewers outside Dell's corporate network will receive a DNS/connection timeout ("can't reach this page") because Dell's internal infrastructure is not accessible from the public internet.
 
 2. BUILT-IN REVIEWER / DEMO MODE (For Store Certification):
-   To allow the Microsoft certification team to fully test and verify all primary functions, streaming capabilities, and UI features without needing Dell intranet credentials, version 2.2.0 includes a dedicated, full-fidelity "Reviewer Demo Mode":
+   To allow the Microsoft certification team to fully test and verify all primary functions, streaming capabilities, and UI features without needing Dell intranet credentials, version 2.3.0 includes a dedicated, full-fidelity "Reviewer Demo Mode":
 
    STEP-BY-STEP TESTING INSTRUCTIONS FOR REVIEWERS:
    Step 1: Open Microsoft Edge and click the AskDell Dev Assistant icon in the toolbar to open the Side Panel.

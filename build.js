@@ -1,7 +1,7 @@
 // ============================================================
 // build.js — Production Build & Obfuscation Script
 // Creates a clean, stripped, production-ready 'dist/' folder
-// and packages it into 'dist/AskDell-Dev-Assistant-v2.1.zip'
+// and packages it into 'dist/AskDell-Dev-Assistant-v<version>.zip'
 // ============================================================
 
 const fs = require("fs");
